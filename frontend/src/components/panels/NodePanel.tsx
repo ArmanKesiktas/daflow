@@ -260,8 +260,23 @@ const CATEGORY_ICON_BG: Record<string, string> = {
   output:         'bg-[#BF5AF2]',
 }
 
+// Categories open by default
+const DEFAULT_OPEN: Set<NodeCategory> = new Set(['source', 'preparation', 'analysis', 'output'])
+
+import { useState } from 'react'
+
 export default function NodePanel({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
   const { t } = useI18n()
+
+  // Per-category open/closed state
+  const [openCats, setOpenCats] = useState<Set<NodeCategory>>(new Set(DEFAULT_OPEN))
+
+  const toggleCat = (key: NodeCategory) =>
+    setOpenCats((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
 
   const onDragStart = (e: React.DragEvent, nodeType: string) => {
     if (DISABLED_TYPES.has(nodeType)) { e.preventDefault(); return }
@@ -330,43 +345,68 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
       {CATEGORIES.map(({ key, labelKey, accent, dot }) => {
         const defs = NODE_DEFINITIONS.filter((d) => d.category === key)
         const iconBg = CATEGORY_ICON_BG[key] ?? 'bg-black/[0.06] dark:bg-white/[0.07]'
+        const isOpen = openCats.has(key)
         return (
-          <div key={key} className="mb-4">
-            <div className={`flex items-center gap-1.5 px-4 py-1`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-80`} />
-              <span className={`text-[10px] font-semibold uppercase tracking-widest ${accent} opacity-80`}>{t(labelKey)}</span>
-            </div>
-            {defs.map((def) => {
-              const disabled = DISABLED_TYPES.has(def.type)
-              return (
-                <div
-                  key={def.type}
-                  draggable={!disabled}
-                  onDragStart={(e) => onDragStart(e, def.type)}
-                  title={disabled ? `${t(def.labelKey)} — Coming soon` : t(def.descKey)}
-                  className={`mx-3 mb-1 px-3 py-2.5 rounded-xl border flex items-center gap-3 transition-all ${
-                    disabled
-                      ? 'opacity-35 cursor-not-allowed grayscale bg-black/[0.03] dark:bg-white/[0.03] border-black/[0.04] dark:border-white/[0.04] select-none'
-                      : 'bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.07] dark:hover:bg-white/[0.07] cursor-grab active:cursor-grabbing border-black/[0.06] dark:border-white/[0.06] hover:border-black/[0.12] dark:hover:border-white/[0.12]'
-                  }`}
-                >
-                  <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg}`}>
-                    {def.icon}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12px] font-medium text-[#1d1d1f]/80 dark:text-white/80 leading-tight truncate flex items-center gap-1.5">
-                      {t(def.labelKey)}
-                      {disabled && (
-                        <span className="text-[8px] font-semibold uppercase tracking-wider text-[#1d1d1f]/30 dark:text-white/30 bg-black/[0.06] dark:bg-white/[0.06] px-1 py-0.5 rounded">
-                          soon
-                        </span>
-                      )}
+          <div key={key} className="mb-1">
+            {/* Accordion header */}
+            <button
+              onClick={() => toggleCat(key)}
+              className="w-full flex items-center gap-1.5 px-4 py-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors rounded-lg group"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-80 flex-shrink-0`} />
+              <span className={`text-[10px] font-semibold uppercase tracking-widest ${accent} opacity-80 flex-1 text-left`}>
+                {t(labelKey)}
+              </span>
+              <span className="text-[9px] font-medium text-[#1d1d1f]/25 dark:text-white/25 mr-0.5">
+                {defs.length}
+              </span>
+              <svg
+                width="8" height="8" viewBox="0 0 8 8" fill="none"
+                className={`flex-shrink-0 text-[#1d1d1f]/30 dark:text-white/30 transition-transform duration-200 ${isOpen ? 'rotate-90' : 'rotate-0'}`}
+              >
+                <path d="M2 1.5l3 2.5-3 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {/* Collapsible node list */}
+            <div
+              className="overflow-hidden transition-all duration-200 ease-in-out"
+              style={{ maxHeight: isOpen ? `${defs.length * 56}px` : '0px', opacity: isOpen ? 1 : 0 }}
+            >
+              <div className="pb-2">
+                {defs.map((def) => {
+                  const disabled = DISABLED_TYPES.has(def.type)
+                  return (
+                    <div
+                      key={def.type}
+                      draggable={!disabled}
+                      onDragStart={(e) => onDragStart(e, def.type)}
+                      title={disabled ? `${t(def.labelKey)} — Coming soon` : t(def.descKey)}
+                      className={`mx-3 mb-1 px-3 py-2.5 rounded-xl border flex items-center gap-3 transition-all ${
+                        disabled
+                          ? 'opacity-35 cursor-not-allowed grayscale bg-black/[0.03] dark:bg-white/[0.03] border-black/[0.04] dark:border-white/[0.04] select-none'
+                          : 'bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.07] dark:hover:bg-white/[0.07] cursor-grab active:cursor-grabbing border-black/[0.06] dark:border-white/[0.06] hover:border-black/[0.12] dark:hover:border-white/[0.12]'
+                      }`}
+                    >
+                      <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg}`}>
+                        {def.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-medium text-[#1d1d1f]/80 dark:text-white/80 leading-tight truncate flex items-center gap-1.5">
+                          {t(def.labelKey)}
+                          {disabled && (
+                            <span className="text-[8px] font-semibold uppercase tracking-wider text-[#1d1d1f]/30 dark:text-white/30 bg-black/[0.06] dark:bg-white/[0.06] px-1 py-0.5 rounded">
+                              soon
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-[#1d1d1f]/30 dark:text-white/30 leading-tight truncate mt-0.5">{t(def.descKey)}</div>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-[#1d1d1f]/30 dark:text-white/30 leading-tight truncate mt-0.5">{t(def.descKey)}</div>
-                  </div>
-                </div>
-              )
-            })}
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )
       })}

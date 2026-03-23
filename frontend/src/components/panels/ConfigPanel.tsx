@@ -44,183 +44,179 @@ interface NodeHelp {
   options?: OptionHelp[]
 }
 
-const HELP_CONTENT: Record<string, NodeHelp> = {
+interface BilingualStr { en: string; tr: string }
+interface BilingualOption { name: BilingualStr; description: BilingualStr }
+interface BilingualHelp {
+  concept: BilingualStr
+  description: BilingualStr
+  options?: BilingualOption[]
+}
+
+function localiseHelp(h: BilingualHelp, lang: 'en' | 'tr'): NodeHelp {
+  return {
+    concept: h.concept[lang],
+    description: h.description[lang],
+    options: h.options?.map((o) => ({ name: o.name[lang], description: o.description[lang] })),
+  }
+}
+
+const HELP_CONTENT: Record<string, BilingualHelp> = {
   database_query: {
-    concept: 'Database Query',
-    description:
-      'Connects to a relational database and executes a SQL query, returning the result as a DataFrame for downstream analysis. Supports PostgreSQL, MySQL, and SQLite. Credentials are stored in the workflow config — use a read-only database user in production.',
+    concept: { en: 'Database Query', tr: 'Veritabanı Sorgusu' },
+    description: {
+      en: 'Connects to a relational database and executes a SQL query, returning the result as a DataFrame for downstream analysis. Supports PostgreSQL, MySQL, and SQLite. Credentials are stored in the workflow config — use a read-only database user in production.',
+      tr: 'İlişkisel bir veritabanına bağlanır ve SQL sorgusu çalıştırarak sonucu aşağı akış analizleri için DataFrame olarak döndürür. PostgreSQL, MySQL ve SQLite desteklenir. Kimlik bilgileri iş akışı yapılandırmasında saklanır — üretim ortamında salt okunur bir kullanıcı kullanın.',
+    },
     options: [
-      { name: 'Database Type', description: 'postgresql — via psycopg2 driver. mysql — via pymysql driver. sqlite — local file, no credentials needed.' },
-      { name: 'Connection Mode', description: '"Fields" lets you fill in host, port, username, and password individually. "Connection String" accepts a full SQLAlchemy URL like postgresql://user:pass@host:5432/db.' },
-      { name: 'SQL Query', description: 'Any valid SELECT statement. Always include a LIMIT clause to avoid fetching millions of rows. The row_limit setting acts as a hard cap on top of your query.' },
-      { name: 'Row Limit', description: 'Maximum rows returned by this node regardless of what the query returns. Default is 10 000.' },
-      { name: 'SSH Tunnel', description: 'Enable when the database is behind a firewall or private network. The app connects to an SSH jump host first, then tunnels through to the database. Use either SSH Password or a PEM-encoded Private Key — not both.' },
+      { name: { en: 'Database Type', tr: 'Veritabanı Türü' }, description: { en: 'postgresql — via psycopg2 driver. mysql — via pymysql driver. sqlite — local file, no credentials needed.', tr: 'postgresql — psycopg2 sürücüsü. mysql — pymysql sürücüsü. sqlite — yerel dosya, kimlik bilgisi gerekmez.' } },
+      { name: { en: 'Connection Mode', tr: 'Bağlantı Modu' }, description: { en: '"Fields" lets you fill in host, port, username, and password individually. "Connection String" accepts a full SQLAlchemy URL like postgresql://user:pass@host:5432/db.', tr: '"Alanlar" seçeneği host, port, kullanıcı adı ve şifreyi ayrı ayrı girmenizi sağlar. "Bağlantı Dizesi" postgresql://user:pass@host:5432/db gibi tam bir SQLAlchemy URL kabul eder.' } },
+      { name: { en: 'SQL Query', tr: 'SQL Sorgusu' }, description: { en: 'Any valid SELECT statement. Always include a LIMIT clause to avoid fetching millions of rows. The row_limit setting acts as a hard cap on top of your query.', tr: 'Geçerli herhangi bir SELECT ifadesi. Milyonlarca satır çekmemek için her zaman LIMIT ekleyin. row_limit ayarı sorgunuza ek sert bir üst sınır uygular.' } },
+      { name: { en: 'Row Limit', tr: 'Satır Sınırı' }, description: { en: 'Maximum rows returned by this node regardless of what the query returns. Default is 10 000.', tr: 'Sorgu ne döndürürse döndürsün bu düğümün döndüreceği maksimum satır sayısı. Varsayılan 10 000.' } },
+      { name: { en: 'SSH Tunnel', tr: 'SSH Tüneli' }, description: { en: 'Enable when the database is behind a firewall or private network. The app connects to an SSH jump host first, then tunnels through to the database.', tr: 'Veritabanı bir güvenlik duvarı veya özel ağın arkasındaysa etkinleştirin. Uygulama önce bir SSH atlama sunucusuna bağlanır, ardından veritabanına tünel açar.' } },
     ],
   },
   file_upload: {
-    concept: 'File Upload',
-    description:
-      'The entry point of every workflow. Upload a structured dataset (CSV, Excel, or Parquet) to make it available to downstream nodes. The file is stored temporarily on the server and referenced by a unique ID.',
+    concept: { en: 'File Upload', tr: 'Dosya Yükleme' },
+    description: {
+      en: 'The entry point of every workflow. Upload a structured dataset (CSV, Excel, or Parquet) to make it available to downstream nodes. The file is stored temporarily on the server and referenced by a unique ID.',
+      tr: 'Her iş akışının giriş noktası. Yapılandırılmış bir veri kümesi (CSV, Excel veya Parquet) yükleyerek aşağı akış düğümleri için kullanılabilir hale getirin. Dosya sunucuda geçici olarak saklanır ve benzersiz bir ID ile referans alınır.',
+    },
     options: [
-      { name: 'Accepted formats', description: '.csv, .xlsx, .xls, .parquet — tabular data files with a header row.' },
+      { name: { en: 'Accepted formats', tr: 'Kabul Edilen Formatlar' }, description: { en: '.csv, .xlsx, .xls, .parquet — tabular data files with a header row.', tr: '.csv, .xlsx, .xls, .parquet — başlık satırı olan tablo veri dosyaları.' } },
     ],
   },
   column_type_detection: {
-    concept: 'Column Type Detection',
-    description:
-      'Automatically inspects each column and assigns a semantic type — numeric, categorical, datetime, boolean, or text. Downstream analysis nodes use these types to apply the most appropriate algorithms.',
+    concept: { en: 'Column Type Detection', tr: 'Sütun Türü Tespiti' },
+    description: {
+      en: 'Automatically inspects each column and assigns a semantic type — numeric, categorical, datetime, boolean, or text. Downstream analysis nodes use these types to apply the most appropriate algorithms.',
+      tr: 'Her sütunu otomatik olarak inceler ve sayısal, kategorik, tarih-saat, boole veya metin gibi anlamsal bir tür atar. Aşağı akış analiz düğümleri en uygun algoritmayı seçmek için bu türleri kullanır.',
+    },
     options: [
-      { name: 'Categorical Threshold', description: 'If a column has fewer unique values than this number, it is classified as categorical. Increase for datasets with many distinct but still discrete values.' },
-      { name: 'Try Parse Dates', description: 'When enabled, columns with date-like string patterns are converted to datetime type, enabling time-series analysis.' },
+      { name: { en: 'Categorical Threshold', tr: 'Kategorik Eşik' }, description: { en: 'If a column has fewer unique values than this number, it is classified as categorical. Increase for datasets with many distinct but still discrete values.', tr: 'Bir sütun bu sayıdan az benzersiz değere sahipse kategorik olarak sınıflandırılır. Çok sayıda ama yine de ayrık değerlere sahip veri kümeleri için artırın.' } },
+      { name: { en: 'Try Parse Dates', tr: 'Tarihleri Ayrıştırmayı Dene' }, description: { en: 'When enabled, columns with date-like string patterns are converted to datetime type, enabling time-series analysis.', tr: 'Etkinleştirildiğinde, tarih benzeri dize kalıplarına sahip sütunlar tarih-saat türüne dönüştürülerek zaman serisi analizine olanak tanır.' } },
     ],
   },
   missing_value: {
-    concept: 'Missing Values',
-    description:
-      'Detects null, NaN, or empty entries in the dataset. Missing data can bias statistical results if not handled. Choose a strategy that matches your data context.',
+    concept: { en: 'Missing Values', tr: 'Eksik Değerler' },
+    description: {
+      en: 'Detects null, NaN, or empty entries in the dataset. Missing data can bias statistical results if not handled. Choose a strategy that matches your data context.',
+      tr: 'Veri kümesindeki null, NaN veya boş girdileri tespit eder. Ele alınmadığı takdirde eksik veriler istatistiksel sonuçları çarpıtabilir. Veri bağlamınıza uygun bir strateji seçin.',
+    },
     options: [
-      { name: 'report_only', description: 'Do nothing — just count and report missing values per column. No data is changed.' },
-      { name: 'drop_rows', description: 'Remove every row that contains at least one missing value. Suitable when missing rate is very low (<5%).' },
-      { name: 'fill_mean', description: 'Replace missing values with the column arithmetic mean. Best for normally distributed numeric columns.' },
-      { name: 'fill_median', description: 'Replace with the column median. More robust than mean when data contains outliers.' },
-      { name: 'fill_mode', description: 'Replace with the most frequent value. Works for both numeric and categorical columns.' },
-      { name: 'fill_constant', description: 'Replace with a fixed value (e.g., 0 or "Unknown"). Use when the absence itself carries meaning.' },
+      { name: { en: 'report_only', tr: 'Yalnızca Raporla' }, description: { en: 'Do nothing — just count and report missing values per column. No data is changed.', tr: 'Hiçbir şey yapma — yalnızca sütun başına eksik değerleri say ve raporla. Veri değişmez.' } },
+      { name: { en: 'drop_rows', tr: 'Satırları Sil' }, description: { en: 'Remove every row that contains at least one missing value. Suitable when missing rate is very low (<5%).', tr: 'En az bir eksik değer içeren her satırı kaldır. Eksik oran çok düşük olduğunda uygundur (<%5).' } },
+      { name: { en: 'fill_mean', tr: 'Ortalama ile Doldur' }, description: { en: 'Replace missing values with the column arithmetic mean. Best for normally distributed numeric columns.', tr: 'Eksik değerleri sütunun aritmetik ortalamasıyla değiştir. Normal dağılımlı sayısal sütunlar için en iyisi.' } },
+      { name: { en: 'fill_median', tr: 'Medyan ile Doldur' }, description: { en: 'Replace with the column median. More robust than mean when data contains outliers.', tr: 'Sütun medyanı ile değiştir. Veri aykırı değerler içerdiğinde ortalamadan daha güvenilir.' } },
+      { name: { en: 'fill_mode', tr: 'En Sık Değer ile Doldur' }, description: { en: 'Replace with the most frequent value. Works for both numeric and categorical columns.', tr: 'En sık görülen değerle değiştir. Hem sayısal hem de kategorik sütunlar için çalışır.' } },
+      { name: { en: 'fill_constant', tr: 'Sabit ile Doldur' }, description: { en: 'Replace with a fixed value (e.g., 0 or "Unknown"). Use when the absence itself carries meaning.', tr: 'Sabit bir değerle değiştir (ör. 0 veya "Bilinmiyor"). Yokluğun kendisi anlam taşıdığında kullanın.' } },
     ],
   },
   duplicate_detection: {
-    concept: 'Duplicate Detection',
-    description:
-      'Identifies rows that are identical across all columns (or a chosen subset). Duplicates can inflate statistics and skew model training.',
+    concept: { en: 'Duplicate Detection', tr: 'Yinelenen Satır Tespiti' },
+    description: {
+      en: 'Identifies rows that are identical across all columns (or a chosen subset). Duplicates can inflate statistics and skew model training.',
+      tr: 'Tüm sütunlarda (veya seçilen bir alt kümede) özdeş olan satırları tespit eder. Yinelemeler istatistikleri şişirebilir ve model eğitimini çarpıtabilir.',
+    },
     options: [
-      { name: 'Subset', description: 'Columns to compare. Leave empty to compare all columns. Enter comma-separated column names to detect partial duplicates.' },
-      { name: 'Keep', description: '"first" keeps the first occurrence and marks the rest; "last" keeps the last; "none" marks all duplicates.' },
-      { name: 'Drop', description: 'When enabled, duplicate rows are removed from the output dataframe. When off, rows are flagged but kept.' },
+      { name: { en: 'Subset', tr: 'Alt Küme' }, description: { en: 'Columns to compare. Leave empty to compare all columns. Enter comma-separated column names to detect partial duplicates.', tr: 'Karşılaştırılacak sütunlar. Tüm sütunları karşılaştırmak için boş bırakın. Kısmi yinelenmeleri tespit etmek için virgülle ayrılmış sütun adları girin.' } },
+      { name: { en: 'Keep', tr: 'Sakla' }, description: { en: '"first" keeps the first occurrence and marks the rest; "last" keeps the last; "none" marks all duplicates.', tr: '"first" ilk tekrarı saklar kalanları işaretler; "last" sonuncuyu saklar; "none" tüm yinelenenler işaretler.' } },
+      { name: { en: 'Drop', tr: 'Sil' }, description: { en: 'When enabled, duplicate rows are removed from the output dataframe. When off, rows are flagged but kept.', tr: 'Etkinleştirildiğinde yinelenen satırlar çıktı veri çerçevesinden kaldırılır. Kapalıyken satırlar işaretlenir ama muhafaza edilir.' } },
     ],
   },
   filter_rows: {
-    concept: 'Filter Rows',
-    description:
-      'Applies a conditional rule to retain only rows matching a criterion. Useful for focusing analysis on a specific segment (e.g., a product category or date range).',
+    concept: { en: 'Filter Rows', tr: 'Satır Filtreleme' },
+    description: {
+      en: 'Applies a conditional rule to retain only rows matching a criterion. Useful for focusing analysis on a specific segment (e.g., a product category or date range).',
+      tr: 'Yalnızca bir kritere uyan satırları korumak için koşullu bir kural uygular. Belirli bir segmente (ör. ürün kategorisi veya tarih aralığı) odaklanmak için kullanışlıdır.',
+    },
     options: [
-      { name: 'Column Name', description: 'The column to evaluate. Must match an existing column name exactly (case-sensitive).' },
-      { name: 'Operator', description: 'Comparison operator: == (equals), != (not equals), > / >= / < / <= (numeric comparisons), contains / not_contains (string search), isnull / notnull (missing check).' },
-      { name: 'Value', description: 'The value to compare against. Leave empty for isnull / notnull operators. For numeric columns enter a number; for text columns enter a string.' },
+      { name: { en: 'Column Name', tr: 'Sütun Adı' }, description: { en: 'The column to evaluate. Must match an existing column name exactly (case-sensitive).', tr: 'Değerlendirilecek sütun. Mevcut sütun adıyla tam olarak eşleşmelidir (büyük/küçük harf duyarlı).' } },
+      { name: { en: 'Operator', tr: 'Operatör' }, description: { en: 'Comparison: == != > >= < <= contains not_contains isnull notnull.', tr: 'Karşılaştırma: == != > >= < <= contains not_contains isnull notnull.' } },
+      { name: { en: 'Value', tr: 'Değer' }, description: { en: 'The value to compare against. Leave empty for isnull / notnull operators.', tr: 'Karşılaştırılacak değer. isnull / notnull operatörleri için boş bırakın.' } },
     ],
   },
   statistics: {
-    concept: 'Descriptive Statistics',
-    description:
-      'Computes summary statistics for every numeric column. These metrics help you understand the central tendency, spread, and shape of your data distribution before applying more complex analysis.',
+    concept: { en: 'Descriptive Statistics', tr: 'Tanımlayıcı İstatistikler' },
+    description: {
+      en: 'Computes summary statistics for every numeric column. These metrics help you understand the central tendency, spread, and shape of your data distribution before applying more complex analysis.',
+      tr: 'Her sayısal sütun için özet istatistikler hesaplar. Bu ölçütler daha karmaşık analizler uygulamadan önce veri dağılımınızın merkezi eğilimini, yayılımını ve şeklini anlamanıza yardımcı olur.',
+    },
     options: [
-      { name: 'Mean', description: 'Arithmetic average — the center of gravity of the data.' },
-      { name: 'Std Dev', description: 'Standard deviation — how spread out values are around the mean.' },
-      { name: 'Skewness', description: 'Asymmetry of the distribution. 0 = symmetric, >0 = right tail, <0 = left tail.' },
-      { name: 'Kurtosis', description: 'Tail heaviness. High kurtosis means more extreme outliers are present.' },
-      { name: 'Min / Max / Median', description: 'Range and central value of the data.' },
+      { name: { en: 'Mean', tr: 'Ortalama' }, description: { en: 'Arithmetic average — the center of gravity of the data.', tr: 'Aritmetik ortalama — verinin ağırlık merkezi.' } },
+      { name: { en: 'Std Dev', tr: 'Standart Sapma' }, description: { en: 'Standard deviation — how spread out values are around the mean.', tr: 'Standart sapma — değerlerin ortalama etrafında ne kadar yayıldığı.' } },
+      { name: { en: 'Skewness', tr: 'Çarpıklık' }, description: { en: 'Asymmetry of the distribution. 0 = symmetric, >0 = right tail, <0 = left tail.', tr: 'Dağılımın asimetrisi. 0 = simetrik, >0 = sağ kuyruk, <0 = sol kuyruk.' } },
+      { name: { en: 'Kurtosis', tr: 'Basıklık' }, description: { en: 'Tail heaviness. High kurtosis means more extreme outliers are present.', tr: 'Kuyruk ağırlığı. Yüksek basıklık daha fazla aşırı aykırı değer olduğu anlamına gelir.' } },
+      { name: { en: 'Min / Max / Median', tr: 'Min / Maks / Medyan' }, description: { en: 'Range and central value of the data.', tr: 'Verinin aralığı ve merkez değeri.' } },
     ],
   },
   anomaly_detection: {
-    concept: 'Anomaly Detection',
-    description:
-      'Identifies data points that deviate significantly from the rest of the dataset. Anomalies can indicate data entry errors, fraud, sensor failures, or genuinely rare events. Four algorithms are available — choose based on your data distribution and dimensionality.',
+    concept: { en: 'Anomaly Detection', tr: 'Anomali Tespiti' },
+    description: {
+      en: 'Identifies data points that deviate significantly from the rest of the dataset. Four algorithms are available — choose based on your data distribution and dimensionality.',
+      tr: 'Veri kümesinin geri kalanından önemli ölçüde sapan veri noktalarını tespit eder. Dört algoritma mevcuttur — veri dağılımınıza ve boyutuna göre seçin.',
+    },
     options: [
-      {
-        name: 'IQR — Interquartile Range',
-        description:
-          'Non-parametric method. Computes fences from quartiles and flags values outside them.\n\n' +
-          'IQR = Q₃ − Q₁\n' +
-          'Lower fence: L = Q₁ − k · IQR\n' +
-          'Upper fence: U = Q₃ + k · IQR\n' +
-          'Anomaly if: xᵢ < L  or  xᵢ > U\n\n' +
-          'Score = max(L − xᵢ, xᵢ − U, 0) / IQR\n\n' +
-          'k = 1.5 (standard Tukey inner fence). No normality assumption. Fast: O(n log n).',
-      },
-      {
-        name: 'Z-Score',
-        description:
-          'Parametric method. Standardises each value relative to the column mean and standard deviation.\n\n' +
-          'zᵢ = (xᵢ − x̄) / s\n' +
-          'Anomaly if: |zᵢ| > θ   (default θ = 3.0)\n\n' +
-          'Under a normal distribution, |z| > 3 captures only ~0.27% of data. Sensitive to outliers distorting x̄ and s — use Modified Z-Score when outliers are already present.',
-      },
-      {
-        name: 'Modified Z-Score (MAD)',
-        description:
-          'Robust variant. Replaces mean/std with median and Median Absolute Deviation (MAD), which are not influenced by existing outliers.\n\n' +
-          'MAD = median(|xᵢ − x̃|)\n' +
-          'Mᵢ = 0.6745 · |xᵢ − x̃| / MAD\n' +
-          'Anomaly if: Mᵢ > θ   (default θ = 3.5)\n\n' +
-          'Constant 0.6745 = Φ⁻¹(0.75): the 75th percentile of the standard normal, making MAD comparable to std for Gaussian data. Recommended over plain Z-Score when data may already contain outliers.',
-      },
-      {
-        name: 'Isolation Forest',
-        description:
-          'Ensemble ML method. Anomalies are isolated faster (shorter paths in random trees) than normal points.\n\n' +
-          'Anomaly score:  s(x, n) = 2^(−E[h(x)] / c(n))\n' +
-          'where E[h(x)] = average path length across T trees\n' +
-          'c(n) = 2·H(n−1) − 2(n−1)/n   (normaliser)\n' +
-          'H(k) = ln(k) + 0.5772…   (harmonic number)\n\n' +
-          's → 1: very short path → anomaly\n' +
-          's → 0: long path → normal point\n' +
-          's ≈ 0.5: indeterminate\n\n' +
-          'Best for high-dimensional or non-linear data. Complexity: O(T · n log n).',
-      },
-      {
-        name: 'IQR Multiplier (k)',
-        description: 'Controls IQR fence width. k = 1.5 is the standard Tukey inner fence. k = 3.0 is the outer fence (only extreme outliers). Lower k → stricter detection.',
-      },
-      {
-        name: 'Z-Score Threshold (θ)',
-        description: 'Cut-off for Z-Score and Modified Z-Score. Default 3.0 / 3.5. Reduce to catch subtle anomalies; increase to flag only extreme deviations.',
-      },
-      {
-        name: 'Contamination',
-        description: 'Expected fraction of anomalies in the dataset (0–0.5), used by Isolation Forest to set the decision threshold. Set close to the true outlier rate for best results.',
-      },
+      { name: { en: 'IQR — Interquartile Range', tr: 'IQR — Çeyrekler Arasındaki Aralık' }, description: { en: 'Non-parametric. Fences: L = Q₁ − k·IQR, U = Q₃ + k·IQR. Anomaly if xᵢ < L or xᵢ > U. No normality assumption. Fast O(n log n).', tr: 'Parametrik olmayan. Sınırlar: L = Q₁ − k·IQR, U = Q₃ + k·IQR. Anomali: xᵢ < L veya xᵢ > U. Normallik varsayımı yoktur. Hızlı O(n log n).' } },
+      { name: { en: 'Z-Score', tr: 'Z-Skoru' }, description: { en: 'Parametric. z = (x−mean)/std. Anomaly if |z| > θ (default 3.0). Assumes normally distributed data. Sensitive to existing outliers.', tr: 'Parametrik. z = (x−ortalama)/std. Anomali: |z| > θ (varsayılan 3.0). Normal dağılım varsayar. Mevcut aykırı değerlere duyarlı.' } },
+      { name: { en: 'Modified Z-Score (MAD)', tr: 'Değiştirilmiş Z-Skoru (MAD)' }, description: { en: 'Robust. Uses median and MAD instead of mean/std. M = 0.6745·|x−median|/MAD. Anomaly if M > θ (default 3.5). Recommended when data already contains outliers.', tr: 'Güçlü. Ortalama/std yerine medyan ve MAD kullanır. M = 0.6745·|x−medyan|/MAD. Anomali: M > θ (varsayılan 3.5). Veri aykırı değerler içeriyorsa önerilir.' } },
+      { name: { en: 'Isolation Forest', tr: 'İzolasyon Ormanı' }, description: { en: 'Ensemble ML. Anomalies are isolated faster in random trees. Score s→1 means anomaly, s→0 means normal. Best for high-dimensional or non-linear data.', tr: 'Topluluk makine öğrenmesi. Anomaliler rastgele ağaçlarda daha hızlı izole edilir. s→1 anomali, s→0 normal anlamına gelir. Yüksek boyutlu veya doğrusal olmayan veriler için en iyisi.' } },
+      { name: { en: 'IQR Multiplier (k)', tr: 'IQR Çarpanı (k)' }, description: { en: 'Controls IQR fence width. k=1.5 is the standard Tukey inner fence. k=3.0 is the outer fence. Lower k → stricter detection.', tr: 'IQR sınır genişliğini kontrol eder. k=1.5 standart Tukey iç sınırdır. k=3.0 dış sınırdır. Düşük k → daha katı tespit.' } },
+      { name: { en: 'Z-Score Threshold (θ)', tr: 'Z-Skoru Eşiği (θ)' }, description: { en: 'Cut-off for Z-Score and Modified Z-Score. Default 3.0 / 3.5. Reduce to catch subtle anomalies; increase to flag only extreme deviations.', tr: 'Z-Skoru ve Değiştirilmiş Z-Skoru için kesim noktası. Varsayılan 3.0 / 3.5. İnce anomalileri yakalamak için azaltın; yalnızca aşırı sapmaları işaretlemek için artırın.' } },
+      { name: { en: 'Contamination', tr: 'Kirlilik Oranı' }, description: { en: 'Expected fraction of anomalies (0–0.5), used by Isolation Forest to set the decision threshold.', tr: 'Beklenen anomali oranı (0–0.5); İzolasyon Ormanı tarafından karar eşiğini belirlemek için kullanılır.' } },
     ],
   },
   correlation: {
-    concept: 'Correlation Analysis',
-    description:
-      'Measures the linear (or monotonic) relationship between pairs of numeric columns. A correlation coefficient r ranges from −1 (perfect inverse) through 0 (no relationship) to +1 (perfect positive).',
+    concept: { en: 'Correlation Analysis', tr: 'Korelasyon Analizi' },
+    description: {
+      en: 'Measures the linear (or monotonic) relationship between pairs of numeric columns. Coefficient r ranges from −1 to +1.',
+      tr: 'Sayısal sütun çiftleri arasındaki doğrusal (veya monoton) ilişkiyi ölçer. Katsayı r, −1 ile +1 arasında değişir.',
+    },
     options: [
-      { name: 'Method → Pearson', description: 'Measures linear correlation. Assumes both variables are normally distributed. Most common choice.' },
-      { name: 'Method → Spearman', description: 'Rank-based correlation. Non-parametric — works with ordinal data and non-normal distributions.' },
-      { name: 'Method → Kendall', description: 'Another rank-based measure. More robust with small samples and many ties.' },
-      { name: 'Threshold', description: 'Pairs with |r| above this value are highlighted as "strong correlations". Common thresholds: 0.5 (moderate), 0.7 (strong), 0.9 (very strong).' },
+      { name: { en: 'Pearson', tr: 'Pearson' }, description: { en: 'Linear correlation. Assumes normal distribution. Most common choice.', tr: 'Doğrusal korelasyon. Normal dağılım varsayar. En yaygın seçim.' } },
+      { name: { en: 'Spearman', tr: 'Spearman' }, description: { en: 'Rank-based, non-parametric. Works with ordinal data and non-normal distributions.', tr: 'Sıra tabanlı, parametrik olmayan. Sıralı veri ve normal olmayan dağılımlarla çalışır.' } },
+      { name: { en: 'Kendall', tr: 'Kendall' }, description: { en: 'Another rank-based measure. More robust with small samples and many ties.', tr: 'Başka bir sıra tabanlı ölçüm. Küçük örnekler ve çok sayıda eşdeğer değerle daha güçlü.' } },
+      { name: { en: 'Threshold', tr: 'Eşik Değer' }, description: { en: 'Pairs with |r| above this value are highlighted as strong correlations. Common: 0.5 moderate, 0.7 strong, 0.9 very strong.', tr: '|r| değeri bu eşiğin üzerindeki çiftler güçlü korelasyon olarak vurgulanır. Yaygın: 0.5 orta, 0.7 güçlü, 0.9 çok güçlü.' } },
     ],
   },
   distribution: {
-    concept: 'Distribution Analysis',
-    description:
-      'Visualises how values are distributed across each numeric column using histograms and kernel density estimation (KDE). Also runs normality tests to check if data follows a Gaussian distribution.',
+    concept: { en: 'Distribution Analysis', tr: 'Dağılım Analizi' },
+    description: {
+      en: 'Visualises how values are distributed across each numeric column using histograms and KDE. Also runs normality tests.',
+      tr: 'Histogramlar ve KDE kullanarak değerlerin her sayısal sütunda nasıl dağıldığını görselleştirir. Normallik testleri de çalıştırır.',
+    },
     options: [
-      { name: 'Histogram Bins', description: 'Number of equal-width intervals to group values into. More bins → finer detail but noisier. Fewer bins → smoother but may hide patterns. Rule of thumb: √n where n = row count.' },
+      { name: { en: 'Histogram Bins', tr: 'Histogram Kutuları' }, description: { en: 'Number of equal-width intervals. More bins → finer detail but noisier. Rule of thumb: √n.', tr: 'Eşit genişlikli aralık sayısı. Daha fazla kutu → daha ince ayrıntı ama gürültülü. Kural: √n.' } },
     ],
   },
   report: {
-    concept: 'Report Builder',
-    description:
-      'Aggregates outputs from upstream analysis nodes into a structured, multi-section report. Supports PDF export. Each connected analysis node contributes its own section (statistics, anomalies, correlations, etc.).',
+    concept: { en: 'Report Builder', tr: 'Rapor Oluşturucu' },
+    description: {
+      en: 'Aggregates outputs from upstream analysis nodes into a structured, multi-section report. Supports PDF export.',
+      tr: 'Yukarı akış analiz düğümlerinin çıktılarını yapılandırılmış, çok bölümlü bir raporda toplar. PDF dışa aktarmayı destekler.',
+    },
     options: [
-      { name: 'Report Title', description: 'The heading displayed at the top of the generated report and in the report list.' },
+      { name: { en: 'Report Title', tr: 'Rapor Başlığı' }, description: { en: 'The heading displayed at the top of the generated report.', tr: 'Oluşturulan raporun üstünde gösterilen başlık.' } },
     ],
   },
   ai_insights: {
-    concept: 'AI Insights',
-    description:
-      'Uses a large language model (Gemini or OpenAI) to write a natural-language interpretation of your data analysis. The AI receives all upstream statistics, anomaly counts, and correlation findings, then produces a structured 6-section report.',
+    concept: { en: 'AI Insights', tr: 'YZ Öngörüleri' },
+    description: {
+      en: 'Uses a large language model (Gemini or OpenAI) to write a natural-language interpretation of your data analysis. Produces a structured 6-section report.',
+      tr: 'Veri analizinizin doğal dil yorumunu yazmak için büyük bir dil modeli (Gemini veya OpenAI) kullanır. Yapılandırılmış 6 bölümlü bir rapor üretir.',
+    },
     options: [
-      { name: 'AI Provider', description: 'gemini = Google Gemini 2.5 Flash (fast, recommended). openai = GPT-4o (requires OpenAI API key).' },
-      { name: 'Report Language', description: 'Language of the generated AI narrative. English produces formal business English; Türkçe produces a Turkish-language report.' },
+      { name: { en: 'AI Provider', tr: 'YZ Sağlayıcı' }, description: { en: 'gemini = Google Gemini 2.5 Flash (fast, recommended). openai = GPT-4o (requires OpenAI API key).', tr: 'gemini = Google Gemini 2.5 Flash (hızlı, önerilen). openai = GPT-4o (OpenAI API anahtarı gerektirir).' } },
+      { name: { en: 'Report Language', tr: 'Rapor Dili' }, description: { en: 'Language of the generated AI narrative. English = formal business English; Türkçe = Turkish-language report.', tr: 'Oluşturulan YZ anlatısının dili. English = resmi İngilizce; Türkçe = Türkçe rapor.' } },
     ],
   },
   dashboard: {
-    concept: 'Dashboard',
-    description:
-      'Creates an interactive visual dashboard from connected analysis results. Displays charts, tables, and metrics in a single-page view. Connect Statistics, Anomaly Detection, Correlation, and Distribution nodes to populate all panels.',
+    concept: { en: 'Dashboard', tr: 'Pano' },
+    description: {
+      en: 'Creates an interactive visual dashboard from connected analysis results. Connect Statistics, Anomaly Detection, Correlation, and Distribution nodes to populate all panels.',
+      tr: 'Bağlı analiz sonuçlarından etkileşimli bir görsel pano oluşturur. Tüm panelleri doldurmak için İstatistikler, Anomali Tespiti, Korelasyon ve Dağılım düğümlerini bağlayın.',
+    },
     options: [
-      { name: 'Dashboard Title', description: 'Title shown in the dashboard header.' },
+      { name: { en: 'Dashboard Title', tr: 'Pano Başlığı' }, description: { en: 'Title shown in the dashboard header.', tr: 'Pano başlığında gösterilen başlık.' } },
     ],
   },
 }
@@ -230,7 +226,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
   const { saveNow } = useWorkflowSave()
   const nodeStatuses = useExecutionStore((s) => s.nodeStatuses)
   const [showHelp, setShowHelp] = useState(false)
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const upstreamColumns = useUpstreamColumns(nodeId)
 
   // ── Collapsed: icon-only strip ────────────────────────────────────────────
@@ -280,7 +276,8 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
   const data = node.data as NodeData
   const config = data.config as Record<string, unknown>
   const execStatus = nodeStatuses[nodeId!]
-  const help = HELP_CONTENT[node.type || '']
+  const rawHelp = HELP_CONTENT[node.type || '']
+  const help = rawHelp ? localiseHelp(rawHelp, lang as 'en' | 'tr') : undefined
   const categoryColor = getCategoryIconBg(data.category)
 
   const set = (key: string, value: unknown) => {

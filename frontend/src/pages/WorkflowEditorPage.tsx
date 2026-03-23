@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ReactFlowProvider } from '@xyflow/react'
 import FlowCanvas from '../components/flow/FlowCanvas'
@@ -6,21 +6,27 @@ import Toolbar from '../components/flow/Toolbar'
 import NodePanel from '../components/panels/NodePanel'
 import ConfigPanel from '../components/panels/ConfigPanel'
 import ResultsPanel from '../components/panels/ResultsPanel'
+import AIInsightsModal from '../components/AIInsightsModal'
 import { useFlowStore } from '../store/flowStore'
 import { useExecutionStore } from '../store/executionStore'
 import { useExecutionStream } from '../hooks/useExecutionStream'
 import { workflowsApi } from '../api/workflows'
+import { executionsApi } from '../api/executions'
 import toast from 'react-hot-toast'
 import type { Node } from '@xyflow/react'
 import type { NodeData } from '../types/workflow'
 
 export default function WorkflowEditorPage() {
   const { workflowId } = useParams<{ workflowId: string }>()
-  const { loadGraph, setWorkflowId, setWorkflowName } = useFlowStore()
-  const { executionId, setExecutionId, reset: resetExecution } = useExecutionStore()
+  const { nodes, loadGraph, setWorkflowId, setWorkflowName } = useFlowStore()
+  const { executionId, isRunning, status, setExecutionId, reset: resetExecution } = useExecutionStore()
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+
+  // AI Insights modal state
+  const [aiInsights, setAiInsights] = useState<string | null>(null)
+  const prevRunningRef = useRef(false)
 
   // Stream execution status via SSE
   useExecutionStream(executionId)
@@ -36,6 +42,27 @@ export default function WorkflowEditorPage() {
       toast.error('Failed to load workflow')
     })
   }, [workflowId])
+
+  // Auto-show AI Insights modal when execution completes and an ai_insights node exists
+  useEffect(() => {
+    const wasRunning = prevRunningRef.current
+    prevRunningRef.current = isRunning
+
+    // Transition: running → stopped (done / success / error)
+    if (wasRunning && !isRunning && executionId && status?.status === 'success') {
+      const aiNode = nodes.find((n) => n.data?.node_type === 'ai_insights')
+      if (!aiNode) return
+
+      executionsApi.getNodeResult(executionId, aiNode.id)
+        .then((result) => {
+          const insights = (result?.output as Record<string, unknown>)?.insights
+          if (typeof insights === 'string' && insights.trim()) {
+            setAiInsights(insights)
+          }
+        })
+        .catch(() => {/* silently ignore */})
+    }
+  }, [isRunning, executionId, status, nodes])
 
   const handleRunComplete = (execId: string) => {
     resetExecution()
@@ -64,6 +91,14 @@ export default function WorkflowEditorPage() {
           <ConfigPanel nodeId={selectedNodeId} collapsed={!rightOpen} onToggle={() => setRightOpen((v) => !v)} />
         </div>
       </div>
+
+      {/* AI Insights modal — shown automatically when execution completes */}
+      {aiInsights && (
+        <AIInsightsModal
+          insights={aiInsights}
+          onClose={() => setAiInsights(null)}
+        />
+      )}
     </ReactFlowProvider>
   )
 }
