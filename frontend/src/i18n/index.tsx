@@ -1,0 +1,350 @@
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+
+export type Lang = 'en' | 'tr'
+
+// ── Translation strings ───────────────────────────────────────────────────────
+
+const translations = {
+  en: {
+    // App / Nav
+    appName: 'Daflow',
+    workflows: 'Workflows',
+    reports: 'Reports',
+    newWorkflow: 'New Workflow',
+    creating: 'Creating…',
+    switchToLight: 'Switch to Light Mode',
+    switchToDark: 'Switch to Dark Mode',
+    language: 'Language',
+
+    // WorkflowsListPage
+    workflowsSubtitle: 'Build and run your data analysis pipelines.',
+    loading: 'Loading…',
+    noWorkflowsYet: 'No workflows yet',
+    noWorkflowsDesc: 'Create your first data analysis pipeline.',
+    nodes: 'nodes',
+    deleteWorkflow: 'Delete workflow',
+
+    // WorkflowEditor / Toolbar
+    save: 'Save',
+    saved: 'Saved',
+    run: 'Run',
+    running: 'Running',
+    workflowStarted: 'Workflow started',
+    failedToStart: 'Failed to start workflow',
+    failedToSave: 'Save your workflow first',
+    backToWorkflows: 'Back to workflows',
+
+    // NodePanel
+    components: 'Components',
+
+    // ConfigPanel
+    selectNode: 'Select a node',
+    noConfigNeeded: 'No configuration needed.',
+    viewGuide: 'View guide →',
+
+    // ResultsPanel
+    nodeOutput: 'Node Output',
+    loadResult: 'Load Result',
+    loadingResult: 'Loading…',
+    selectNodeToInspect: 'Select a node to inspect',
+    failedToLoadResults: 'Failed to load results',
+
+    // ReportsPage
+    reportsSubtitle: 'Generated from workflow executions',
+    noReportsYet: 'No reports yet',
+    noReportsDesc: 'Add a Report node to a workflow and run it',
+    generatedAt: 'Generated',
+    backToWorkflowsList: 'Workflows',
+    sections: 'sections',
+
+    // Status
+    idle: 'idle',
+    success: 'success',
+    error: 'error',
+
+    // Node category labels
+    source: 'Source',
+    preparation: 'Preparation',
+    transformation: 'Transformation',
+    analysis: 'Analysis',
+    visualization: 'Visualization',
+    ml: 'Machine Learning',
+    output: 'Output',
+
+    // Node labels
+    fileUpload: 'File Upload',
+    databaseQuery: 'Database Query',
+    descDatabaseQuery: 'Query PostgreSQL, MySQL or SQLite',
+    columnTypes: 'Column Types',
+    missingValues: 'Missing Values',
+    duplicates: 'Duplicates',
+    filterRows: 'Filter Rows',
+    statistics: 'Statistics',
+    anomalyDetection: 'Anomaly Detection',
+    correlation: 'Correlation',
+    distribution: 'Distribution',
+    normalize: 'Normalize',
+    encode: 'Encode',
+    pivot: 'Pivot Table',
+    groupBy: 'Group By',
+    columnOps: 'Column Ops',
+    customPython: 'Custom Python',
+    join: 'Join',
+    timeSeries: 'Time Series',
+    trainTestSplit: 'Train/Test Split',
+    mlModel: 'ML Model',
+    dataExport: 'Data Export',
+    descNormalize: 'Scale numeric columns (min-max, z-score, robust)',
+    descEncode: 'Encode categorical columns (one-hot, label)',
+    descPivot: 'Reshape dataframe into a pivot table',
+    descGroupBy: 'Group rows and aggregate columns',
+    descColumnOps: 'Select, drop, rename or cast columns',
+    descCustomPython: 'Run custom Python code on the dataframe',
+    descJoin: 'Merge two dataframes (inner/left/right/outer)',
+    descTimeSeries: 'Trend, rolling mean & forecast',
+    descTrainTestSplit: 'Split dataset for model training',
+    descMlModel: 'Train & evaluate a scikit-learn model',
+    descDataExport: 'Export dataframe to CSV, Excel or JSON',
+    statisticsChart: 'Statistics Chart',
+    anomalyChart: 'Anomaly Chart',
+    correlationChart: 'Correlation Chart',
+    distributionChart: 'Distribution Chart',
+    dashboard: 'Dashboard',
+    report: 'Report',
+    aiInsights: 'AI Insights',
+
+    // Node descriptions (in sidebar)
+    descFileUpload: 'Load CSV or Excel dataset',
+    descColumnTypes: 'Detect semantic column types',
+    descMissingValues: 'Analyse and impute missing data',
+    descDuplicates: 'Find and remove duplicate rows',
+    descFilterRows: 'Filter rows by condition',
+    descStatistics: 'Mean, std, skewness, kurtosis',
+    descAnomalyDetection: 'IQR, Z-Score or Isolation Forest',
+    descCorrelation: 'Correlation matrix and strong pairs',
+    descDistribution: 'Histogram, KDE & normality tests',
+    descStatisticsChart: 'Visualise descriptive statistics',
+    descAnomalyChart: 'Scatter plot of anomaly detection',
+    descCorrelationChart: 'Correlation heatmap',
+    descDistributionChart: 'Histogram & KDE distribution',
+    descDashboard: 'Visual analysis dashboard',
+    descReport: 'Generate structured PDF report',
+    descAiInsights: 'Natural language interpretation',
+
+    // ConfigPanel field labels
+    method: 'Method',
+    iqrMultiplier: 'IQR Multiplier',
+    zscoreThreshold: 'Z-Score Threshold',
+    contamination: 'Contamination (0-0.5)',
+    strategy: 'Strategy',
+    strongCorrelationThreshold: 'Strong Correlation Threshold',
+    columnName: 'Column Name',
+    operator: 'Operator',
+    value: 'Value',
+    reportTitle: 'Report Title',
+    dashboardTitle: 'Dashboard Title',
+    dashboardPanels: 'Dashboard Panels',
+    selectPanels: 'Uncheck panels to hide them from dashboard',
+    histogramBins: 'Histogram Bins',
+    aiProvider: 'AI Provider',
+    reportLanguage: 'Report Language',
+    uploadDataset: 'Upload Dataset',
+
+    // Guide / Help panel
+    options: 'Options',
+  },
+
+  tr: {
+    // App / Nav
+    appName: 'Daflow',
+    workflows: 'İş Akışları',
+    reports: 'Raporlar',
+    newWorkflow: 'Yeni İş Akışı',
+    creating: 'Oluşturuluyor…',
+    switchToLight: 'Açık Temaya Geç',
+    switchToDark: 'Koyu Temaya Geç',
+    language: 'Dil',
+
+    // WorkflowsListPage
+    workflowsSubtitle: 'Veri analizi iş akışlarınızı oluşturun ve çalıştırın.',
+    loading: 'Yükleniyor…',
+    noWorkflowsYet: 'Henüz iş akışı yok',
+    noWorkflowsDesc: 'İlk veri analizi hattınızı oluşturun.',
+    nodes: 'düğüm',
+    deleteWorkflow: 'İş akışını sil',
+
+    // WorkflowEditor / Toolbar
+    save: 'Kaydet',
+    saved: 'Kaydedildi',
+    run: 'Çalıştır',
+    running: 'Çalışıyor',
+    workflowStarted: 'İş akışı başlatıldı',
+    failedToStart: 'İş akışı başlatılamadı',
+    failedToSave: 'Önce iş akışını kaydedin',
+    backToWorkflows: 'İş akışlarına dön',
+
+    // NodePanel
+    components: 'Bileşenler',
+
+    // ConfigPanel
+    selectNode: 'Bir düğüm seçin',
+    noConfigNeeded: 'Yapılandırma gerekmez.',
+    viewGuide: 'Kılavuzu görüntüle →',
+
+    // ResultsPanel
+    nodeOutput: 'Düğüm Çıktısı',
+    loadResult: 'Sonucu Yükle',
+    loadingResult: 'Yükleniyor…',
+    selectNodeToInspect: 'İncelemek için bir düğüm seçin',
+    failedToLoadResults: 'Sonuçlar yüklenemedi',
+
+    // ReportsPage
+    reportsSubtitle: 'İş akışı çalıştırmalarından oluşturuldu',
+    noReportsYet: 'Henüz rapor yok',
+    noReportsDesc: 'Bir iş akışına Rapor düğümü ekleyin ve çalıştırın',
+    generatedAt: 'Oluşturuldu',
+    backToWorkflowsList: 'İş Akışları',
+    sections: 'bölüm',
+
+    // Status
+    idle: 'beklemede',
+    success: 'başarılı',
+    error: 'hata',
+
+    // Node category labels
+    source: 'Kaynak',
+    preparation: 'Hazırlık',
+    transformation: 'Dönüşüm',
+    analysis: 'Analiz',
+    visualization: 'Görselleştirme',
+    ml: 'Makine Öğrenmesi',
+    output: 'Çıktı',
+
+    // Node labels
+    fileUpload: 'Dosya Yükle',
+    databaseQuery: 'Veritabanı Sorgusu',
+    descDatabaseQuery: 'PostgreSQL, MySQL veya SQLite sorgula',
+    columnTypes: 'Sütun Tipleri',
+    missingValues: 'Eksik Değerler',
+    duplicates: 'Tekrarlar',
+    filterRows: 'Satır Filtrele',
+    statistics: 'İstatistikler',
+    anomalyDetection: 'Anomali Tespiti',
+    correlation: 'Korelasyon',
+    distribution: 'Dağılım',
+    normalize: 'Normalleştir',
+    encode: 'Kodla',
+    pivot: 'Pivot Tablo',
+    groupBy: 'Grupla',
+    columnOps: 'Sütun İşlemleri',
+    customPython: 'Özel Python',
+    join: 'Birleştir',
+    timeSeries: 'Zaman Serisi',
+    trainTestSplit: 'Eğitim/Test Ayırma',
+    mlModel: 'ML Modeli',
+    dataExport: 'Veri Dışa Aktar',
+    descNormalize: 'Sayısal sütunları ölçeklendir (min-max, z-score, robust)',
+    descEncode: 'Kategorik sütunları kodla (one-hot, label)',
+    descPivot: 'Veriyi pivot tabloya dönüştür',
+    descGroupBy: 'Satırları grupla ve sütunları topla',
+    descColumnOps: 'Sütunları seç, sil, yeniden adlandır veya dönüştür',
+    descCustomPython: 'Veri çerçevesinde özel Python kodu çalıştır',
+    descJoin: 'İki veri çerçevesini birleştir (inner/left/right/outer)',
+    descTimeSeries: 'Trend, hareketli ortalama ve tahmin',
+    descTrainTestSplit: 'Model eğitimi için veri seti böl',
+    descMlModel: 'scikit-learn modeli eğit ve değerlendir',
+    descDataExport: 'Veri çerçevesini CSV, Excel veya JSON olarak dışa aktar',
+    statisticsChart: 'İstatistik Grafiği',
+    anomalyChart: 'Anomali Grafiği',
+    correlationChart: 'Korelasyon Grafiği',
+    distributionChart: 'Dağılım Grafiği',
+    dashboard: 'Gösterge Paneli',
+    report: 'Rapor',
+    aiInsights: 'YZ Analizi',
+
+    // Node descriptions (in sidebar)
+    descFileUpload: 'CSV veya Excel veri seti yükle',
+    descColumnTypes: 'Semantik sütun tiplerini algıla',
+    descMissingValues: 'Eksik verileri analiz et ve doldur',
+    descDuplicates: 'Tekrar eden satırları bul ve kaldır',
+    descFilterRows: 'Koşula göre satır filtrele',
+    descStatistics: 'Ortalama, std, çarpıklık, basıklık',
+    descAnomalyDetection: 'IQR, Z-Skoru veya Isolation Forest',
+    descCorrelation: 'Korelasyon matrisi ve güçlü çiftler',
+    descDistribution: 'Histogram, KDE ve normallik testleri',
+    descStatisticsChart: 'Tanımlayıcı istatistikleri görselleştir',
+    descAnomalyChart: 'Anomali tespiti dağılım grafiği',
+    descCorrelationChart: 'Korelasyon ısı haritası',
+    descDistributionChart: 'Histogram ve KDE dağılımı',
+    descDashboard: 'Görsel analiz gösterge paneli',
+    descReport: 'Yapılandırılmış PDF raporu oluştur',
+    descAiInsights: 'Doğal dil yorumu',
+
+    // ConfigPanel field labels
+    method: 'Yöntem',
+    iqrMultiplier: 'IQR Çarpanı',
+    zscoreThreshold: 'Z-Skoru Eşiği',
+    contamination: 'Kirlilik Oranı (0-0.5)',
+    strategy: 'Strateji',
+    strongCorrelationThreshold: 'Güçlü Korelasyon Eşiği',
+    columnName: 'Sütun Adı',
+    operator: 'Operatör',
+    value: 'Değer',
+    reportTitle: 'Rapor Başlığı',
+    dashboardTitle: 'Panel Başlığı',
+    dashboardPanels: 'Panel Seçimi',
+    selectPanels: 'Panellerin işaretini kaldırarak dashboarddan gizleyin',
+    histogramBins: 'Histogram Aralıkları',
+    aiProvider: 'YZ Sağlayıcı',
+    reportLanguage: 'Rapor Dili',
+    uploadDataset: 'Veri Seti Yükle',
+
+    // Guide / Help panel
+    options: 'Seçenekler',
+  },
+} as const
+
+export type TranslationKey = keyof typeof translations.en
+
+// ── Context ───────────────────────────────────────────────────────────────────
+
+interface I18nContextValue {
+  lang: Lang
+  setLang: (l: Lang) => void
+  t: (key: TranslationKey) => string
+}
+
+const I18nContext = createContext<I18nContextValue>({
+  lang: 'en',
+  setLang: () => {},
+  t: (key) => key,
+})
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(() => {
+    const stored = localStorage.getItem('daflow_lang')
+    return stored === 'tr' ? 'tr' : 'en'
+  })
+
+  const setLang = (l: Lang) => {
+    setLangState(l)
+    localStorage.setItem('daflow_lang', l)
+  }
+
+  const t = (key: TranslationKey): string => translations[lang][key] as string
+
+  // Sync document <title>
+  useEffect(() => {
+    document.title = 'Daflow'
+  }, [])
+
+  return (
+    <I18nContext.Provider value={{ lang, setLang, t }}>
+      {children}
+    </I18nContext.Provider>
+  )
+}
+
+export function useI18n() {
+  return useContext(I18nContext)
+}

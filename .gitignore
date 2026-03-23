@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.env
+
+# Node
+node_modules/
+frontend/dist/
+
+# Build artifacts (generated at deploy time)
+backend/static_files/
+
+# OS
+.DS_Store
+*.log
+.vite/
