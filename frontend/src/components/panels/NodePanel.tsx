@@ -1,6 +1,16 @@
 import type { NodeCategory } from '../../types/workflow'
 import { useI18n, type TranslationKey } from '../../i18n'
 
+// Nodes that are not yet implemented — shown greyed-out and non-draggable
+const DISABLED_TYPES = new Set([
+  // Transformation
+  'normalize', 'encode', 'pivot', 'group_by', 'column_ops', 'custom_python', 'join',
+  // Time-series (single node inside analysis)
+  'time_series',
+  // ML
+  'train_test_split', 'ml_model',
+])
+
 export interface NodeDefinition {
   type: string
   labelKey: TranslationKey
@@ -254,6 +264,7 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
   const { t } = useI18n()
 
   const onDragStart = (e: React.DragEvent, nodeType: string) => {
+    if (DISABLED_TYPES.has(nodeType)) { e.preventDefault(); return }
     e.dataTransfer.setData('application/dataflow-node', nodeType)
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -276,17 +287,24 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
           {CATEGORIES.map(({ key }) => {
             const defs = NODE_DEFINITIONS.filter((d) => d.category === key)
             const iconBg = CATEGORY_ICON_BG[key] ?? 'bg-black/[0.06]'
-            return defs.map((def) => (
-              <div
-                key={def.type}
-                draggable
-                onDragStart={(e) => onDragStart(e, def.type)}
-                title={`${t(def.labelKey)} — ${t(def.descKey)}`}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white cursor-grab active:cursor-grabbing hover:scale-110 transition-transform flex-shrink-0 ${iconBg}`}
-              >
-                {def.icon}
-              </div>
-            ))
+            return defs.map((def) => {
+              const disabled = DISABLED_TYPES.has(def.type)
+              return (
+                <div
+                  key={def.type}
+                  draggable={!disabled}
+                  onDragStart={(e) => onDragStart(e, def.type)}
+                  title={disabled ? `${t(def.labelKey)} — Coming soon` : `${t(def.labelKey)} — ${t(def.descKey)}`}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg} ${
+                    disabled
+                      ? 'opacity-35 cursor-not-allowed grayscale'
+                      : 'cursor-grab active:cursor-grabbing hover:scale-110 transition-transform'
+                  }`}
+                >
+                  {def.icon}
+                </div>
+              )
+            })
           })}
         </div>
       </aside>
@@ -318,23 +336,37 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
               <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-80`} />
               <span className={`text-[10px] font-semibold uppercase tracking-widest ${accent} opacity-80`}>{t(labelKey)}</span>
             </div>
-            {defs.map((def) => (
-              <div
-                key={def.type}
-                draggable
-                onDragStart={(e) => onDragStart(e, def.type)}
-                title={t(def.descKey)}
-                className="mx-3 mb-1 px-3 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.07] dark:hover:bg-white/[0.07] cursor-grab active:cursor-grabbing flex items-center gap-3 border border-black/[0.06] dark:border-white/[0.06] hover:border-black/[0.12] dark:hover:border-white/[0.12] transition-all"
-              >
-                <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg}`}>
-                  {def.icon}
-                </span>
-                <div className="min-w-0">
-                  <div className="text-[12px] font-medium text-[#1d1d1f]/80 dark:text-white/80 leading-tight truncate">{t(def.labelKey)}</div>
-                  <div className="text-[10px] text-[#1d1d1f]/30 dark:text-white/30 leading-tight truncate mt-0.5">{t(def.descKey)}</div>
+            {defs.map((def) => {
+              const disabled = DISABLED_TYPES.has(def.type)
+              return (
+                <div
+                  key={def.type}
+                  draggable={!disabled}
+                  onDragStart={(e) => onDragStart(e, def.type)}
+                  title={disabled ? `${t(def.labelKey)} — Coming soon` : t(def.descKey)}
+                  className={`mx-3 mb-1 px-3 py-2.5 rounded-xl border flex items-center gap-3 transition-all ${
+                    disabled
+                      ? 'opacity-35 cursor-not-allowed grayscale bg-black/[0.03] dark:bg-white/[0.03] border-black/[0.04] dark:border-white/[0.04] select-none'
+                      : 'bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.07] dark:hover:bg-white/[0.07] cursor-grab active:cursor-grabbing border-black/[0.06] dark:border-white/[0.06] hover:border-black/[0.12] dark:hover:border-white/[0.12]'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg}`}>
+                    {def.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-medium text-[#1d1d1f]/80 dark:text-white/80 leading-tight truncate flex items-center gap-1.5">
+                      {t(def.labelKey)}
+                      {disabled && (
+                        <span className="text-[8px] font-semibold uppercase tracking-wider text-[#1d1d1f]/30 dark:text-white/30 bg-black/[0.06] dark:bg-white/[0.06] px-1 py-0.5 rounded">
+                          soon
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-[#1d1d1f]/30 dark:text-white/30 leading-tight truncate mt-0.5">{t(def.descKey)}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )
       })}
