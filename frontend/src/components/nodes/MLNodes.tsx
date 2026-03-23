@@ -42,7 +42,7 @@ function renderTrainTestSplit(output: RawOutput, pos: PopupPos) {
       <KVRow label="Train rows" value={String(s.train_rows ?? '—')} accent="text-[#30D158]" />
       <KVRow label="Test rows" value={String(s.test_rows ?? '—')} accent="text-[#0071E3]" />
       <KVRow label="Test size" value={`${s.test_size != null ? Math.round((s.test_size as number) * 100) : '—'}%`} />
-      {s.stratify_column && <KVRow label="Stratify by" value={String(s.stratify_column)} />}
+      {Boolean(s.stratify_column) && <KVRow label="Stratify by" value={String(s.stratify_column)} />}
     </MLPopup>
   )
 }

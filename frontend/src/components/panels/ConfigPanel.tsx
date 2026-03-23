@@ -427,7 +427,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
                 <span className="text-[11px] font-semibold text-[#1d1d1f]/70 dark:text-white/70">SSH Tunnel</span>
                 <span className="text-[10px] text-[#1d1d1f]/30 dark:text-white/30">firewall / private network</span>
               </label>
-              {config.use_ssh_tunnel && (
+              {Boolean(config.use_ssh_tunnel) && (
                 <div className="space-y-3 pl-1">
                   <Field label="SSH Host">
                     <TextInput value={String(config.ssh_host ?? '')} onChange={(v) => set('ssh_host', v)} placeholder="jump.example.com" />
