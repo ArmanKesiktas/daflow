@@ -1,8 +1,6 @@
 [build]
-builder = "nixpacks"
-buildCommand = "cd frontend && npm install && npm run build && mkdir -p ../backend/static_files && cp -r dist/. ../backend/static_files/"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
