@@ -2,14 +2,7 @@ import type { NodeCategory } from '../../types/workflow'
 import { useI18n, type TranslationKey } from '../../i18n'
 
 // Nodes that are not yet implemented — shown greyed-out and non-draggable
-const DISABLED_TYPES = new Set([
-  // Transformation
-  'normalize', 'encode', 'pivot', 'group_by', 'column_ops', 'custom_python', 'join',
-  // Time-series (single node inside analysis)
-  'time_series',
-  // ML
-  'train_test_split', 'ml_model',
-])
+const DISABLED_TYPES = new Set<string>([])
 
 export interface NodeDefinition {
   type: string
