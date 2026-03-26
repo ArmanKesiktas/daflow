@@ -112,6 +112,8 @@ function MLNodeFactory(icon: string, renderPopup?: (output: RawOutput, pos: Popu
           category={data.category}
           selected={selected}
           note={data.note ? String(data.note) : undefined}
+          error_message={data.error_message}
+          cached={data.cached}
         >
           {data.status === 'success' && renderPopup && (
             <span className="text-[#1d1d1f]/20 dark:text-white/20 text-[10px]">Hover to preview</span>

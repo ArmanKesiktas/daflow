@@ -48,6 +48,14 @@ const translations = {
     loadingResult: 'Loading…',
     selectNodeToInspect: 'Select a node to inspect',
     failedToLoadResults: 'Failed to load results',
+    tabOutput: 'Output',
+    tabLineage: 'Lineage',
+    addedColumns: 'Added',
+    removedColumns: 'Removed',
+    keptColumns: 'Kept',
+    inputColumns: 'Input Columns',
+    outputColumns: 'Output Columns',
+    noUpstreamNodes: 'No upstream nodes',
 
     // ReportsPage
     reportsSubtitle: 'Generated from workflow executions',
@@ -199,6 +207,14 @@ const translations = {
     loadingResult: 'Yükleniyor…',
     selectNodeToInspect: 'İncelemek için bir düğüm seçin',
     failedToLoadResults: 'Sonuçlar yüklenemedi',
+    tabOutput: 'Çıktı',
+    tabLineage: 'Köken',
+    addedColumns: 'Eklenen',
+    removedColumns: 'Kaldırılan',
+    keptColumns: 'Korunan',
+    inputColumns: 'Giriş Sütunları',
+    outputColumns: 'Çıkış Sütunları',
+    noUpstreamNodes: 'Üst düğüm yok',
 
     // ReportsPage
     reportsSubtitle: 'İş akışı çalıştırmalarından oluşturuldu',

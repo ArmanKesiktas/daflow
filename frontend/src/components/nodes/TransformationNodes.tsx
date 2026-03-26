@@ -175,6 +175,8 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
           category={data.category}
           selected={selected}
           note={data.note ? String(data.note) : undefined}
+          error_message={data.error_message}
+          cached={data.cached}
         >
           {method && <span className="text-[#1d1d1f]/40 dark:text-white/40 capitalize">{method}</span>}
           {data.status === 'success' && renderPopup && (
@@ -237,6 +239,7 @@ export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps
         category={data.category}
         selected={selected}
         note={data.note ? String(data.note) : undefined}
+        error_message={data.error_message}
       >
         <span className="text-[#1d1d1f]/30 dark:text-white/30 text-[10px]">Left · Right</span>
         {data.status === 'success' && (

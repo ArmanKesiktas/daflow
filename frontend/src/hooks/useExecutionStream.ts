@@ -29,7 +29,11 @@ export function useExecutionStream(executionId: string | null) {
 
         // Sync node visual statuses in React Flow canvas
         for (const ns of data.node_statuses || []) {
-          updateNodeData(ns.node_id, { status: ns.status as NodeStatus })
+          updateNodeData(ns.node_id, {
+            status: ns.status as NodeStatus,
+            error_message: ns.error_message ?? undefined,
+            cached: ns.metrics?.cached === true ? true : undefined,
+          })
         }
 
         if (data.done || data.status === 'success' || data.status === 'error') {

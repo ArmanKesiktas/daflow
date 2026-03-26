@@ -56,4 +56,8 @@ export const filesApi = {
   list: () => api.get('/files/').then((r) => r.data),
 
   delete: (fileId: string) => api.delete(`/files/${fileId}`).then((r) => r.data),
+
+  listSamples: () => api.get('/files/samples').then((r) => r.data),
+
+  loadSample: (sampleId: string) => api.post(`/files/samples/${sampleId}/load`).then((r) => r.data),
 }

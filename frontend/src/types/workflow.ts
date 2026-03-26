@@ -13,7 +13,10 @@ export interface NodeData extends Record<string, unknown> {
   category: NodeCategory
   config: NodeConfig
   status: NodeStatus
+  error_message?: string
   resultPreview?: Record<string, unknown>
+  // Cache indicator
+  cached?: boolean
   // File upload specific
   fileId?: string
   storagePath?: string

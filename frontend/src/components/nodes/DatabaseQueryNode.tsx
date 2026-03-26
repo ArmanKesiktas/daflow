@@ -138,6 +138,8 @@ export const DatabaseQueryNode = memo(function DatabaseQueryNode({ id, data, sel
         category={data.category}
         selected={selected}
         note={data.note ? String(data.note) : undefined}
+        error_message={data.error_message}
+        cached={data.cached}
       >
         <span className="flex items-center gap-1.5">
           <span className="text-[#1d1d1f]/50 dark:text-white/50 capitalize">{dbType}</span>

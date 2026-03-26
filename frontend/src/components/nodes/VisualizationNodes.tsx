@@ -123,6 +123,8 @@ function VisualizationNodeFactory(icon: string) {
           category="visualization"
           selected={selected}
           note={data.note ? String(data.note) : undefined}
+          error_message={data.error_message}
+          cached={data.cached}
         >
           {loading && (
             <span className="text-[#5E5CE6] text-[10px]">Loading…</span>

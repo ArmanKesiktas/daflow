@@ -335,6 +335,8 @@ function AnalysisNodeFactory(
           category={data.category}
           selected={selected}
           note={data.note ? String(data.note) : undefined}
+          error_message={data.error_message}
+          cached={data.cached}
         >
           {method && <span className="text-[#1d1d1f]/40 dark:text-white/40 capitalize">{method}</span>}
           {data.resultPreview && (

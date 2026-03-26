@@ -129,6 +129,8 @@ export const FileUploadNode = memo(function FileUploadNode({ id, data, selected 
         category={data.category}
         selected={selected}
         note={data.note ? String(data.note) : undefined}
+        error_message={data.error_message}
+        cached={data.cached}
       >
         {data.filename && (
           <div className="text-[#1d1d1f]/70 dark:text-white/70 truncate max-w-[160px]">{String(data.filename)}</div>
@@ -137,6 +139,29 @@ export const FileUploadNode = memo(function FileUploadNode({ id, data, selected 
           <div className="text-[#1d1d1f]/25 dark:text-white/25">
             {String((data.resultPreview as { row_count?: number }).row_count ?? '')} rows ·{' '}
             {String((data.resultPreview as { column_count?: number }).column_count ?? '')} cols
+          </div>
+        )}
+        {!!(data.uploadPreview && data.columns && (!data.status || data.status === 'idle')) && (
+          <div className="relative mt-1 mx-3 mb-2 overflow-hidden rounded-md border border-black/[0.06] dark:border-white/[0.06]">
+            <table className="w-full text-[9px]">
+              <thead>
+                <tr className="bg-black/[0.04] dark:bg-white/[0.04]">
+                  {(data.columns as any[]).slice(0, 3).map((c: any) => (
+                    <th key={c.name} className="px-1.5 py-0.5 text-left font-medium text-[#1d1d1f]/50 dark:text-white/50 truncate max-w-[55px]">{c.name}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(data.uploadPreview as any[]).slice(0, 3).map((row: any, i: number) => (
+                  <tr key={i} className={i >= 1 ? 'opacity-40' : ''}>
+                    {(data.columns as any[]).slice(0, 3).map((c: any) => (
+                      <td key={c.name} className="px-1.5 py-0.5 text-[#1d1d1f]/70 dark:text-white/70 truncate max-w-[55px]">{String(row[c.name] ?? '')}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-[#1C1C1E] to-transparent pointer-events-none" />
           </div>
         )}
         {data.status === 'success' && (

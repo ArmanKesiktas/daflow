@@ -10,6 +10,8 @@ interface BaseNodeProps {
   children?: ReactNode
   selected?: boolean
   note?: string
+  error_message?: string
+  cached?: boolean
 }
 
 const statusBorder: Record<NodeStatus, string> = {
@@ -37,7 +39,7 @@ const categoryIconBg: Record<string, string> = {
 }
 
 export const BaseNode = memo(function BaseNode({
-  label, icon, status, category, children, selected, note,
+  label, icon, status, category, children, selected, note, error_message, cached,
 }: BaseNodeProps) {
   const iconBg = category ? (categoryIconBg[category] ?? 'bg-black/[0.06] dark:bg-white/[0.07]') : 'bg-black/[0.06] dark:bg-white/[0.07]'
   const iconText = category ? 'text-white' : 'text-[#1d1d1f]/50 dark:text-white/50'
@@ -58,6 +60,11 @@ export const BaseNode = memo(function BaseNode({
           {icon}
         </span>
         <span className="text-[12px] font-semibold text-[#1d1d1f]/85 dark:text-white/85 truncate flex-1 leading-tight">{label}</span>
+        {cached && status === 'success' && (
+          <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/25 rounded px-1.5 py-0.5 flex-shrink-0 leading-none">
+            cached
+          </span>
+        )}
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot[status]}`} />
       </div>
       {/* Body */}
@@ -71,6 +78,14 @@ export const BaseNode = memo(function BaseNode({
         <div className="px-3 pb-2.5 pt-0">
           <div className="text-[10px] text-[#1d1d1f]/55 dark:text-white/55 bg-[#F5A623]/12 dark:bg-[#F5A623]/10 border border-[#F5A623]/25 rounded-lg px-2.5 py-1.5 leading-relaxed">
             📝 {note}
+          </div>
+        </div>
+      )}
+      {/* Error message */}
+      {status === 'error' && error_message && (
+        <div className="px-3 pb-2.5 pt-0">
+          <div className="text-[10px] text-[#FF453A] bg-[#FF453A]/8 border border-[#FF453A]/20 rounded-lg px-2.5 py-1.5 leading-relaxed truncate">
+            {error_message.length > 80 ? error_message.slice(0, 80) + '\u2026' : error_message}
           </div>
         </div>
       )}

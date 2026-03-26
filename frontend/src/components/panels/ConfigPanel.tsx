@@ -321,6 +321,14 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         </button>
       </div>
 
+      {/* ── Error message ─────────────────────────────── */}
+      {execStatus === 'error' && node.data.error_message && (
+        <div className="mx-4 mt-2 p-2.5 bg-[#FF453A]/8 border border-[#FF453A]/20 rounded-lg">
+          <p className="text-[10px] font-semibold text-[#FF453A] mb-0.5">Hata</p>
+          <p className="text-[10px] text-[#FF453A]/80 break-words font-mono">{String(node.data.error_message)}</p>
+        </div>
+      )}
+
       {/* ── Help Guide ──────────────────────────────────── */}
       {showHelp && help ? (
         <div className="p-4 space-y-4 flex-1">
@@ -917,12 +925,39 @@ function FileUploadConfig({
         storagePath: result.storage_path,
         columns: result.columns,
         resultPreview: { row_count: result.row_count, column_count: result.column_count },
+        uploadPreview: result.preview?.slice(0, 5),
       })
       toast.success(`Uploaded: ${result.filename} (${result.row_count} rows)`, { id: toastId })
       // Small delay to let React state settle before saving
       setTimeout(() => saveNow(), 100)
     } catch {
       toast.error('Upload failed', { id: toastId })
+    }
+  }
+
+  const handleSampleLoad = async (sampleId: string) => {
+    const toastId = toast.loading('Loading sample dataset…')
+    try {
+      const result = await filesApi.loadSample(sampleId)
+      updateNodeData(nodeId, {
+        config: {
+          ...config,
+          storage_path: result.storage_path,
+          file_id: result.file_id,
+          filename: result.filename,
+          file_type: 'csv',
+        },
+        filename: result.filename,
+        fileId: result.file_id,
+        storagePath: result.storage_path,
+        columns: result.columns,
+        resultPreview: { row_count: result.row_count, column_count: result.column_count },
+        uploadPreview: result.preview?.slice(0, 5),
+      })
+      toast.success(`Loaded: ${result.filename} (${result.row_count} rows)`, { id: toastId })
+      setTimeout(() => saveNow(), 100)
+    } catch {
+      toast.error('Failed to load sample', { id: toastId })
     }
   }
 
@@ -940,6 +975,16 @@ function FileUploadConfig({
       {Boolean(config.filename) && (
         <div className="text-[11px] text-[#30D158] truncate">{String(config.filename)}</div>
       )}
+      <div className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.06]">
+        <p className="text-[10px] font-semibold text-[#1d1d1f]/35 dark:text-white/35 uppercase tracking-wider mb-2">Örnek Veri Setleri</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[{id:'iris',label:'Iris',icon:'🌸'},{id:'titanic',label:'Titanic',icon:'🚢'},{id:'sales_data',label:'Sales',icon:'📊'}].map(s => (
+            <button key={s.id} onClick={() => handleSampleLoad(s.id)} className="text-[10px] px-2 py-1 rounded-lg bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/20 transition-colors flex items-center gap-1">
+              <span>{s.icon}</span> {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

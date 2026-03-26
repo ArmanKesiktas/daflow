@@ -12,6 +12,8 @@ Status updates are persisted to Supabase so the SSE stream can pick them up.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import traceback
 import uuid
 from collections import defaultdict, deque
@@ -21,6 +23,18 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 
 from app.core.node_registry import NODE_REGISTRY
+
+
+# ─── Hash helper ──────────────────────────────────────────────────────────────
+
+def _compute_node_hash(node_type: str, config: dict, input_hashes: list) -> str:
+    """Deterministic hash for a node based on its type, config, and upstream hashes."""
+    payload = json.dumps(
+        {"t": node_type, "c": config, "i": sorted(input_hashes)},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
 # ─── Graph helpers ────────────────────────────────────────────────────────────
@@ -168,12 +182,14 @@ class WorkflowExecutionEngine:
         workflow_graph: Dict[str, Any],
         execution_id: str,
         on_node_status: Optional[Callable[[str, str, Dict], None]] = None,
+        cache_store: Optional[Dict[str, Dict]] = None,
     ):
         """
         Args:
             workflow_graph: {"nodes": [...], "edges": [...]}
             execution_id:   UUID of the workflow_executions row
             on_node_status: callback(node_id, status, metrics) called after each node
+            cache_store:    {config_hash: output_json} from previous execution for caching
         """
         self.nodes: Dict[str, Dict] = {n["id"]: n for n in workflow_graph.get("nodes", [])}
         self.edges: List[Dict] = workflow_graph.get("edges", [])
@@ -184,6 +200,10 @@ class WorkflowExecutionEngine:
         self.node_outputs: Dict[str, Any] = {}
         self.node_metrics: Dict[str, Dict] = {}
         self.errors: Dict[str, str] = {}
+
+        # Hash-based result caching
+        self.node_hashes: Dict[str, str] = {}
+        self.cache_store: Dict[str, Dict] = cache_store if cache_store is not None else {}
 
     # ── Public API ────────────────────────────────────────────
 
@@ -210,6 +230,23 @@ class WorkflowExecutionEngine:
         node_type = node.get("type", "unknown")
         config = node.get("data", {}).get("config", {})
 
+        # Compute hash for cache lookup
+        upstream_ids = [e["source"] for e in self.edges if e["target"] == node_id]
+        input_hashes = [self.node_hashes.get(uid, "") for uid in upstream_ids]
+        node_hash = _compute_node_hash(node_type, config, input_hashes)
+        self.node_hashes[node_id] = node_hash
+
+        # Check cache before executing
+        if node_hash in self.cache_store:
+            cached = self.cache_store[node_hash]
+            self.node_outputs[node_id] = cached
+            metrics = self._extract_metrics(cached, node_type)
+            metrics["cached"] = True
+            self.node_metrics[node_id] = metrics
+            self.on_node_status(node_id, "running", {})
+            self.on_node_status(node_id, "success", metrics)
+            return
+
         # Notify: starting
         self.on_node_status(node_id, "running", {})
 
@@ -225,6 +262,9 @@ class WorkflowExecutionEngine:
             self.node_outputs[node_id] = output
             metrics = self._extract_metrics(output, node_type)
             self.node_metrics[node_id] = metrics
+
+            # Store in cache for future runs
+            self.cache_store[node_hash] = output
 
             self.on_node_status(node_id, "success", metrics)
 

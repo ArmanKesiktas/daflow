@@ -10,7 +10,7 @@ export const ReportNode = memo(function ReportNode({ data, selected }: NodeProps
   return (
     <>
       <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined}>
+      <BaseNode label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined} error_message={data.error_message} cached={data.cached}>
         <span>Generates structured PDF report</span>
         {data.status === 'success' && (
           <span className="text-[#30D158]">Report ready</span>
@@ -33,6 +33,8 @@ export const AIInsightsNode = memo(function AIInsightsNode({ data, selected }: N
         color=""
         category={data.category}
         selected={selected}
+        error_message={data.error_message}
+        cached={data.cached}
       >
         <span className="capitalize">Provider: {provider}</span>
         {data.status === 'success' && (
@@ -49,7 +51,7 @@ export const DataExportNode = memo(function DataExportNode({ data, selected }: N
   return (
     <>
       <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={data.label} icon="↓" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined}>
+      <BaseNode label={data.label} icon="↓" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined} error_message={data.error_message} cached={data.cached}>
         <span className="uppercase text-[10px] font-semibold">{fmt}</span>
         {data.status === 'success' && (
           <span className="text-[#30D158]">Export ready</span>
@@ -66,7 +68,7 @@ export const DashboardNode = memo(function DashboardNode({ data, selected }: Nod
   return (
     <>
       <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected}>
+      <BaseNode label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected} error_message={data.error_message} cached={data.cached}>
         <span>Modular analysis dashboard</span>
         {data.status === 'success' && (
           <>

@@ -12,7 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
-from app.core.execution_engine import WorkflowExecutionEngine
+from app.core.execution_engine import WorkflowExecutionEngine, _compute_node_hash
 from app.dependencies import get_current_user, get_supabase
 from app.schemas.execution import ExecutionStatusResponse, NodeResultResponse
 
@@ -291,16 +291,46 @@ def _execute_workflow_task(
             if node.get("type") in ("report", "dashboard"):
                 node.setdefault("data", {}).setdefault("config", {})["workflow_name"] = workflow_name
 
-        engine = WorkflowExecutionEngine(graph_data, exec_id, on_node_status)
+        # Build cache_store from the most recent successful execution
+        cache_store: Dict[str, Any] = {}
+        try:
+            prev_exec = (
+                supabase.table("workflow_executions")
+                .select("id")
+                .eq("workflow_id", workflow_id)
+                .eq("status", "success")
+                .neq("id", exec_id)
+                .order("completed_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if prev_exec.data:
+                prev_id = prev_exec.data[0]["id"]
+                prev_nodes = (
+                    supabase.table("node_execution_results")
+                    .select("config_hash, output_json")
+                    .eq("execution_id", prev_id)
+                    .execute()
+                )
+                for row in (prev_nodes.data or []):
+                    if row.get("config_hash") and row.get("output_json"):
+                        cache_store[row["config_hash"]] = row["output_json"]
+        except Exception:
+            pass  # Cache building is best-effort; never block execution
+
+        engine = WorkflowExecutionEngine(graph_data, exec_id, on_node_status, cache_store=cache_store)
         summary = engine.execute()
 
-        # Persist serializable outputs and error messages
+        # Persist serializable outputs, config hashes, and error messages
         for node_id, node_summary in summary.items():
             output_json = _serialize_node_output(engine.node_outputs.get(node_id, {}))
-            patch = {
+            patch: Dict[str, Any] = {
                 "output_json": output_json,
                 "metrics": node_summary.get("metrics", {}),
             }
+            # Store the config hash for future cache lookups
+            if node_id in engine.node_hashes:
+                patch["config_hash"] = engine.node_hashes[node_id]
             if node_summary.get("error"):
                 patch["error_message"] = node_summary["error"]
             supabase.table("node_execution_results").update(patch).eq("execution_id", exec_id).eq("node_id", node_id).execute()
