@@ -122,14 +122,37 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
             # Supabase direct hosts (db.<ref>.supabase.co) only have AAAA (IPv6)
             # records. Platforms like Railway don't support IPv6, so we auto-
             # rewrite to the Supabase Pooler endpoint which has IPv4.
+            # We try multiple pooler prefixes (aws-0, aws-1) since Supabase
+            # assigns projects to different pooler instances.
             import re, socket
             supabase_match = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', effective_host)
             if supabase_match and db_type == "postgresql":
                 project_ref = supabase_match.group(1)
-                pooler_host = "aws-0-eu-central-1.pooler.supabase.com"
-                pooler_port = 6543
                 pooler_user = f"{username}.{project_ref}"
-                conn_str = f"postgresql+psycopg2://{pooler_user}:{password}@{pooler_host}:{pooler_port}/{database}"
+                pooler_port = 6543
+                # Try each pooler prefix until one accepts the connection
+                pooler_prefixes = ["aws-0", "aws-1"]
+                connected = False
+                last_err = None
+                for prefix in pooler_prefixes:
+                    pooler_host = f"{prefix}-eu-central-1.pooler.supabase.com"
+                    test_str = f"postgresql+psycopg2://{pooler_user}:{password}@{pooler_host}:{pooler_port}/{database}"
+                    try:
+                        test_engine = create_engine(test_str)
+                        with test_engine.connect() as test_conn:
+                            test_conn.execute(text("SELECT 1"))
+                        test_engine.dispose()
+                        conn_str = test_str
+                        connected = True
+                        break
+                    except Exception as e:
+                        last_err = e
+                        try:
+                            test_engine.dispose()
+                        except Exception:
+                            pass
+                if not connected and last_err:
+                    raise last_err
             elif db_type == "postgresql":
                 try:
                     ipv4 = socket.getaddrinfo(effective_host, effective_port, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
