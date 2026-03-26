@@ -118,21 +118,27 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
                 else:
                     raise ValueError(f"DatabaseQueryNode: unsupported db_type '{db_type}'")
 
-            # ── Execute query ─────────────────────────────────────────────────
-            # Force IPv4 for PostgreSQL to avoid IPv6 unreachable on some hosts (e.g. Railway)
-            engine_kwargs: Dict[str, Any] = {}
-            if db_type == "postgresql":
-                import socket
+            # ── Supabase IPv6 workaround ────────────────────────────────────
+            # Supabase direct hosts (db.<ref>.supabase.co) only have AAAA (IPv6)
+            # records. Platforms like Railway don't support IPv6, so we auto-
+            # rewrite to the Supabase Pooler endpoint which has IPv4.
+            import re, socket
+            supabase_match = re.match(r'^db\.([a-z0-9]+)\.supabase\.co$', effective_host)
+            if supabase_match and db_type == "postgresql":
+                project_ref = supabase_match.group(1)
+                pooler_host = "aws-0-eu-central-1.pooler.supabase.com"
+                pooler_port = 6543
+                pooler_user = f"{username}.{project_ref}"
+                conn_str = f"postgresql+psycopg2://{pooler_user}:{password}@{pooler_host}:{pooler_port}/{database}"
+            elif db_type == "postgresql":
                 try:
-                    ipv4_addr = socket.getaddrinfo(
-                        effective_host, effective_port,
-                        socket.AF_INET, socket.SOCK_STREAM
-                    )[0][4][0]
-                    # Replace hostname with resolved IPv4 in connection string
-                    conn_str = conn_str.replace(f"@{effective_host}:", f"@{ipv4_addr}:")
+                    ipv4 = socket.getaddrinfo(effective_host, effective_port, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+                    conn_str = conn_str.replace(f"@{effective_host}:", f"@{ipv4}:")
                 except (socket.gaierror, IndexError):
-                    pass  # fallback to original hostname
-            engine = create_engine(conn_str, **engine_kwargs)
+                    pass
+
+            # ── Execute query ─────────────────────────────────────────────────
+            engine = create_engine(conn_str)
             try:
                 with engine.connect() as conn:
                     df = pd.read_sql(text(query), conn)
