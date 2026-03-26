@@ -119,7 +119,20 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
                     raise ValueError(f"DatabaseQueryNode: unsupported db_type '{db_type}'")
 
             # ── Execute query ─────────────────────────────────────────────────
-            engine = create_engine(conn_str)
+            # Force IPv4 for PostgreSQL to avoid IPv6 unreachable on some hosts (e.g. Railway)
+            engine_kwargs: Dict[str, Any] = {}
+            if db_type == "postgresql":
+                import socket
+                try:
+                    ipv4_addr = socket.getaddrinfo(
+                        effective_host, effective_port,
+                        socket.AF_INET, socket.SOCK_STREAM
+                    )[0][4][0]
+                    # Replace hostname with resolved IPv4 in connection string
+                    conn_str = conn_str.replace(f"@{effective_host}:", f"@{ipv4_addr}:")
+                except (socket.gaierror, IndexError):
+                    pass  # fallback to original hostname
+            engine = create_engine(conn_str, **engine_kwargs)
             try:
                 with engine.connect() as conn:
                     df = pd.read_sql(text(query), conn)
