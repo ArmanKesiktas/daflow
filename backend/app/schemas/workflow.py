@@ -38,6 +38,8 @@ class Viewport(BaseModel):
 class WorkflowCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    workspace_id: Optional[str] = None
+    project_id: Optional[str] = None
     nodes: List[WorkflowNode] = Field(default_factory=list)
     edges: List[WorkflowEdge] = Field(default_factory=list)
     viewport: Viewport = Field(default_factory=Viewport)
@@ -46,6 +48,7 @@ class WorkflowCreate(BaseModel):
 class WorkflowSave(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    project_id: Optional[str] = None
     nodes: List[WorkflowNode]
     edges: List[WorkflowEdge]
     viewport: Viewport = Field(default_factory=Viewport)
@@ -61,6 +64,8 @@ class WorkflowResponse(BaseModel):
     user_id: str
     created_at: datetime
     updated_at: datetime
+    workspace_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class WorkflowListItem(BaseModel):
@@ -69,3 +74,5 @@ class WorkflowListItem(BaseModel):
     description: Optional[str] = None
     node_count: int = 0
     updated_at: datetime
+    workspace_id: Optional[str] = None
+    project_id: Optional[str] = None

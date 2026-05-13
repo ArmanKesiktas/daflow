@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from typing import Any, Dict, Generator
+from urllib.parse import quote_plus
 
 import pandas as pd
 
@@ -62,7 +63,8 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
 
     Config keys:
         db_type           (str): 'postgresql' | 'mysql' | 'sqlite'
-        connection_mode   (str): 'fields' | 'connection_string'
+        connection_mode   (str): 'fields' | 'connection_string' | 'connector'
+        connector_id      (str): data_connectors row ID (connection_mode=connector)
         connection_string (str): full SQLAlchemy URL (connection_mode=connection_string)
         host              (str): database host (resolved via SSH tunnel if enabled)
         port              (int): database port
@@ -88,20 +90,32 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
     }
 
     def execute(self, inputs: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
-        from sqlalchemy import create_engine, text  # lazy import
-
         db_type         = config.get("db_type", "postgresql")
         connection_mode = config.get("connection_mode", "fields")
         row_limit       = int(config.get("row_limit", 10_000))
         query           = str(config.get("query", "")).strip()
 
+        if connection_mode == "connector" or config.get("connector_id"):
+            df = self._execute_connector_query(config, query, row_limit)
+            return self._build_output(df)
+
         if not query:
             raise ValueError("DatabaseQueryNode: 'query' is required in config")
+        self._assert_read_only_query(query)
+        df = self._execute_sql_config(config, str(db_type), connection_mode, query)
+
+        if row_limit and len(df) > row_limit:
+            df = df.head(row_limit)
+
+        return self._build_output(df)
+
+    def _execute_sql_config(self, config: Dict[str, Any], db_type: str, connection_mode: str, query: str) -> pd.DataFrame:
+        from sqlalchemy import create_engine, text  # lazy import
 
         with _maybe_ssh_tunnel(config) as (effective_host, effective_port):
             # ── Build connection string ───────────────────────────────────────
             if connection_mode == "connection_string":
-                conn_str = str(config.get("connection_string", ""))
+                conn_str = self._normalize_connection_string(str(config.get("connection_string", "")))
                 if not conn_str:
                     raise ValueError("DatabaseQueryNode: 'connection_string' is required")
             else:
@@ -110,9 +124,9 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
                 password = config.get("password", "")
 
                 if db_type == "postgresql":
-                    conn_str = f"postgresql+psycopg2://{username}:{password}@{effective_host}:{effective_port}/{database}"
+                    conn_str = f"postgresql+psycopg2://{quote_plus(str(username))}:{quote_plus(str(password))}@{effective_host}:{effective_port}/{database}"
                 elif db_type == "mysql":
-                    conn_str = f"mysql+pymysql://{username}:{password}@{effective_host}:{effective_port}/{database}"
+                    conn_str = f"mysql+pymysql://{quote_plus(str(username))}:{quote_plus(str(password))}@{effective_host}:{effective_port}/{database}"
                 elif db_type == "sqlite":
                     conn_str = f"sqlite:///{database}"
                 else:
@@ -164,13 +178,89 @@ class DatabaseQueryProcessor(BaseNodeProcessor):
             engine = create_engine(conn_str)
             try:
                 with engine.connect() as conn:
-                    df = pd.read_sql(text(query), conn)
+                    return pd.read_sql(text(query), conn)
             finally:
                 engine.dispose()
 
+    def _normalize_connection_string(self, value: str) -> str:
+        value = value.strip()
+        if value.startswith("postgres://"):
+            return "postgresql+psycopg2://" + value[len("postgres://"):]
+        if value.startswith("postgresql://"):
+            return "postgresql+psycopg2://" + value[len("postgresql://"):]
+        return value
+
+    def _execute_connector_query(self, config: Dict[str, Any], query: str, row_limit: int) -> pd.DataFrame:
+        connector_id = str(config.get("connector_id") or "").strip()
+        if not connector_id:
+            raise ValueError("DatabaseQueryNode: connector_id is required")
+
+        from app.dependencies import get_supabase
+
+        supabase = get_supabase()
+        lookup = supabase.table("data_connectors").select("*").eq("id", connector_id)
+        user_id = config.get("_user_id")
+        if user_id:
+            lookup = lookup.eq("user_id", str(user_id))
+        connector = lookup.single().execute().data
+        if not connector:
+            raise ValueError("DatabaseQueryNode: connector not found")
+
+        connector_type = connector.get("type")
+        connector_config = connector.get("config_json") or {}
+        if connector_type == "postgres":
+            sql = (query or str(connector_config.get("query") or "select 1 as value")).strip()
+            if not sql:
+                raise ValueError("DatabaseQueryNode: query is required")
+            self._assert_read_only_query(sql)
+            df = self._execute_sql_config(
+                {"connection_string": connector_config.get("connection_string")},
+                "postgresql",
+                "connection_string",
+                sql,
+            )
+        elif connector_type == "supabase_table":
+            df = self._read_supabase_table(connector_config, row_limit)
+        else:
+            raise ValueError("DatabaseQueryNode: select a PostgreSQL or Supabase Table connector")
+
         if row_limit and len(df) > row_limit:
             df = df.head(row_limit)
+        return df
 
+    def _read_supabase_table(self, config: Dict[str, Any], row_limit: int) -> pd.DataFrame:
+        import httpx
+
+        url = str(config.get("url") or "").rstrip("/")
+        key = str(config.get("api_key") or "")
+        table = str(config.get("table") or "").strip()
+        if not url or not key or not table:
+            raise ValueError("DatabaseQueryNode: Supabase url, api key and table are required")
+
+        limit = max(1, min(int(row_limit or 10_000), 50_000))
+        response = httpx.get(
+            f"{url}/rest/v1/{table}?select=*&limit={limit}",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return pd.DataFrame(response.json())
+
+    def _assert_read_only_query(self, query: str) -> None:
+        normalized = " ".join(query.strip().lower().rstrip(";").split())
+        if not normalized:
+            raise ValueError("DatabaseQueryNode: query is required")
+        allowed_prefixes = ("select ", "with ", "show ", "describe ", "explain ")
+        if not normalized.startswith(allowed_prefixes):
+            raise ValueError("DatabaseQueryNode: only read-only SELECT/WITH queries are allowed")
+        forbidden = (" insert ", " update ", " delete ", " drop ", " alter ", " truncate ", " create ", " grant ", " revoke ")
+        padded = f" {normalized} "
+        if any(term in padded for term in forbidden):
+            raise ValueError("DatabaseQueryNode: write or DDL statements are not allowed")
+        if ";" in normalized:
+            raise ValueError("DatabaseQueryNode: multiple SQL statements are not allowed")
+
+    def _build_output(self, df: pd.DataFrame) -> Dict[str, Any]:
         # ── Build output metadata (same shape as file_upload) ─────────────────
         columns = [
             {

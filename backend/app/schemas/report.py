@@ -45,3 +45,4 @@ class FileUploadResponse(BaseModel):
     columns: List[Dict[str, str]]  # [{name, type}]
     preview: List[Dict[str, Any]]
     missing_summary: Dict[str, int]
+    security: Optional[Dict[str, Any]] = None

@@ -1,30 +1,77 @@
 import uuid
 from datetime import datetime, timezone
+from math import isnan, isinf
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from app.config import settings
 from app.dependencies import get_current_user, get_supabase
 from app.schemas.report import ReportCreate, ReportResponse
 from app.services.pdf_generator import generate_pdf
+from app.services.secure_share import (
+    check_graph_dataset_permissions,
+    create_content_share,
+    delete_content_share,
+    has_content_permission,
+    list_active_content_shares_for_current_user,
+)
+from app.services.workspace_service import is_workspace_not_ready, require_workspace_member
 
 router = APIRouter()
 
 
 @router.get("/")
 async def list_reports(
+    workspace_id: str | None = Query(default=None),
+    project_id: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
     supabase=Depends(get_supabase),
 ):
-    result = (
-        supabase.table("reports")
-        .select("id, title, format, execution_id, workflow_id, created_at")
-        .eq("user_id", user["id"])
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return result.data
+    try:
+        if workspace_id:
+            workspace_id, _ = require_workspace_member(supabase, user, workspace_id)
+            query = (
+                supabase.table("reports")
+                .select("id, title, format, execution_id, workflow_id, workspace_id, project_id, created_at")
+                .eq("workspace_id", workspace_id)
+            )
+            if project_id:
+                query = query.eq("project_id", project_id)
+            result = query.order("created_at", desc=True).execute()
+        else:
+            result = (
+                supabase.table("reports")
+                .select("id, title, format, execution_id, workflow_id, workspace_id, project_id, created_at")
+                .eq("user_id", user["id"])
+                .order("created_at", desc=True)
+                .execute()
+            )
+    except HTTPException as exc:
+        if not is_workspace_not_ready(exc):
+            raise
+        result = (
+            supabase.table("reports")
+            .select("id, title, format, execution_id, workflow_id, created_at")
+            .eq("user_id", user["id"])
+            .order("created_at", desc=True)
+            .execute()
+        )
+    rows = result.data or []
+    return [
+        {
+            "id": row.get("id"),
+            "title": row.get("title"),
+            "format": row.get("format"),
+            "execution_id": row.get("execution_id"),
+            "workflow_id": row.get("workflow_id"),
+            "workspace_id": row.get("workspace_id"),
+            "project_id": row.get("project_id"),
+            "created_at": row.get("created_at"),
+        }
+        for row in rows
+    ]
 
 
 @router.post("/", response_model=ReportResponse)
@@ -37,7 +84,7 @@ async def create_report(
     # Verify execution ownership
     exec_row = (
         supabase.table("workflow_executions")
-        .select("id, workflow_id, status")
+        .select("id, workflow_id, status, workspace_id, project_id")
         .eq("id", payload.execution_id)
         .eq("user_id", user["id"])
         .single()
@@ -51,8 +98,15 @@ async def create_report(
     workflow_id = exec_row.data["workflow_id"]
 
     # Pull workflow name
-    wf_row = supabase.table("workflows").select("name").eq("id", workflow_id).single().execute()
+    wf_row = supabase.table("workflows").select("name, graph_data").eq("id", workflow_id).single().execute()
     workflow_name = wf_row.data.get("name", "Untitled") if wf_row.data else "Untitled"
+    check_graph_dataset_permissions(
+        supabase,
+        user,
+        (wf_row.data or {}).get("graph_data") or {},
+        "export",
+        action="export",
+    )
 
     # Aggregate node outputs into report_data
     node_results = (
@@ -81,7 +135,7 @@ async def create_report(
         )
 
     # Persist report record
-    supabase.table("reports").insert({
+    report_payload = {
         "id": report_id,
         "execution_id": payload.execution_id,
         "workflow_id": workflow_id,
@@ -91,7 +145,11 @@ async def create_report(
         "storage_path": storage_path,
         "report_data": report_data,
         "created_at": now,
-    }).execute()
+    }
+    if exec_row.data.get("workspace_id"):
+        report_payload["workspace_id"] = exec_row.data.get("workspace_id")
+        report_payload["project_id"] = exec_row.data.get("project_id")
+    supabase.table("reports").insert(report_payload).execute()
 
     return ReportResponse(
         id=report_id,
@@ -110,9 +168,10 @@ async def download_pdf(
     supabase=Depends(get_supabase),
 ):
     """Download the generated PDF for a report."""
-    row = _get_report(report_id, user["id"], supabase)
+    row = _get_report_for_access(report_id, user, supabase, "export")
     if not row.get("storage_path"):
         raise HTTPException(404, "PDF not available for this report")
+    _check_report_export_permission(row, user, supabase)
 
     pdf_bytes = supabase.storage.from_(settings.STORAGE_BUCKET_REPORTS).download(row["storage_path"])
     return Response(
@@ -129,8 +188,83 @@ async def get_report_json(
     supabase=Depends(get_supabase),
 ):
     """Return the canonical JSON report data."""
+    row = _get_report_for_access(report_id, user, supabase, "view")
+    return _json_safe(row.get("report_data", {}))
+
+
+@router.get("/{report_id}/export-permission")
+async def get_report_export_permission(
+    report_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    """Return whether the current user can export this report."""
+    try:
+        row = _get_report_for_access(report_id, user, supabase, "export")
+        _check_report_export_permission(row, user, supabase)
+        return {"allowed": True}
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            raise
+        return {"allowed": False, "reason": str(exc.detail)}
+
+
+@router.get("/shared-with-me")
+async def shared_with_me(
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    shares = list_active_content_shares_for_current_user(supabase, user, "report")
+    if not shares:
+        return []
+
+    seen: set[str] = set()
+    result: list[dict] = []
+    for share in shares:
+        report_id = str(share.get("resource_id") or "")
+        if not report_id or report_id in seen:
+            continue
+        seen.add(report_id)
+
+        row = supabase.table("reports").select("id, title, format, execution_id, workflow_id, user_id, created_at").eq("id", report_id).single().execute().data
+        if not row:
+            continue
+        result.append({
+            "share_id": share.get("id"),
+            "id": row.get("id"),
+            "title": row.get("title"),
+            "owner": row.get("user_id"),
+            "permission": share.get("permission", "view"),
+            "expires_at": share.get("expires_at"),
+            "created_at": share.get("created_at") or row.get("created_at"),
+            "format": row.get("format", "json"),
+        })
+
+    result.sort(key=lambda item: item["created_at"], reverse=True)
+    return result
+
+
+@router.post("/{report_id}/shares")
+async def share_report(
+    report_id: str,
+    payload: dict,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
     row = _get_report(report_id, user["id"], supabase)
-    return row.get("report_data", {})
+    return create_content_share(supabase, user, "report", report_id, row.get("user_id", ""), payload)
+
+
+@router.delete("/{report_id}/shares/{share_id}")
+async def revoke_report_share(
+    report_id: str,
+    share_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    row = _get_report(report_id, user["id"], supabase)
+    delete_content_share(supabase, user, "report", report_id, row.get("user_id", ""), share_id)
+    return {"deleted": True}
 
 
 @router.post("/{report_id}/ai-insights")
@@ -148,7 +282,8 @@ async def generate_ai_insights(
     if not report_data:
         raise HTTPException(400, "Report has no data to analyse")
 
-    language: str = (payload or {}).get("language", "English")
+    raw_language: str = (payload or {}).get("language", "English")
+    language = "Turkish" if str(raw_language).lower().startswith("tr") else "English"
     provider: str = (payload or {}).get("provider", "gemini")
 
     processor = AIInsightsProcessor()
@@ -172,7 +307,7 @@ async def generate_ai_insights(
         "content": insights,
         "data": {},
     })
-    updated_report_data = {**report_data, "sections": sections}
+    updated_report_data = _json_safe({**report_data, "sections": sections})
     supabase.table("reports").update({"report_data": updated_report_data}).eq("id", report_id).execute()
 
     return {"insights": insights}
@@ -194,6 +329,38 @@ def _get_report(report_id: str, user_id: str, supabase) -> dict:
     return result.data
 
 
+def _get_report_for_access(report_id: str, user: dict, supabase, permission: str) -> dict:
+    result = supabase.table("reports").select("*").eq("id", report_id).single().execute()
+    if not result.data:
+        raise HTTPException(404, "Report not found")
+    row = result.data
+    allowed, reason = has_content_permission(
+        supabase,
+        user,
+        "report",
+        report_id,
+        row.get("user_id"),
+        permission,
+    )
+    if not allowed:
+        raise HTTPException(403, reason)
+    return row
+
+
+def _check_report_export_permission(report_row: dict, user: dict, supabase) -> None:
+    workflow_id = report_row.get("workflow_id")
+    if not workflow_id:
+        return
+    wf_row = supabase.table("workflows").select("graph_data").eq("id", workflow_id).single().execute()
+    check_graph_dataset_permissions(
+        supabase,
+        user,
+        (wf_row.data or {}).get("graph_data") or {},
+        "export",
+        action="export",
+    )
+
+
 def _build_report_data(
     execution_id: str,
     workflow_name: str,
@@ -212,6 +379,10 @@ def _build_report_data(
         "anomaly_detection":    "anomaly_detection",
         "correlation":          "correlation",
         "distribution":         "distribution",
+        "chunk_processing":     "chunk_processing",
+        "mapreduce_aggregation":"mapreduce_aggregation",
+        "spark_groupby":        "spark_groupby",
+        "large_dataset_profiler":"large_dataset_profiler",
         "ai_insights":          "ai_insights",
     }
 
@@ -250,6 +421,14 @@ def _build_report_data(
             }
         elif stype == "distribution":
             section_data = output.get("distributions", {})
+        elif stype == "chunk_processing":
+            section_data = output.get("chunk_summary", {})
+        elif stype == "mapreduce_aggregation":
+            section_data = output.get("mapreduce_summary", {})
+        elif stype == "spark_groupby":
+            section_data = output.get("spark_groupby_summary", output.get("group_by_summary", {}))
+        elif stype == "large_dataset_profiler":
+            section_data = output.get("profiler_summary", {})
         elif stype == "ai_insights":
             content = output.get("insights", "")
 
@@ -272,3 +451,13 @@ def _build_report_data(
         "metadata": metadata,
         "sections": sections,
     }
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, float) and (isnan(value) or isinf(value)):
+        return None
+    return value

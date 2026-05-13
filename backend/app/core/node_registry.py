@@ -15,37 +15,36 @@ from app.nodes.preparation.missing_value import MissingValueProcessor
 from app.nodes.preparation.duplicate_detection import DuplicateDetectionProcessor
 from app.nodes.preparation.filter_rows import FilterRowsProcessor
 
+# ── Transformation ───────────────────────────────────────────────────────────
+from app.nodes.transformation.join import JoinProcessor
+
 # ── Analysis ─────────────────────────────────────────────────────────────────
 from app.nodes.analysis.statistics import StatisticsProcessor
 from app.nodes.analysis.anomaly_detection import AnomalyDetectionProcessor
+from app.nodes.analysis.ccsg_sg_anomaly import CCSGSGAnomalyProcessor
 from app.nodes.analysis.correlation import CorrelationProcessor
 from app.nodes.analysis.distribution import DistributionProcessor
 from app.nodes.analysis.time_series import TimeSeriesProcessor
 
-# ── Transformation ───────────────────────────────────────────────────────────
-from app.nodes.transformation.normalize import NormalizeProcessor
-from app.nodes.transformation.encode import EncodeProcessor
-from app.nodes.transformation.pivot import PivotProcessor
-from app.nodes.transformation.group_by import GroupByProcessor
-from app.nodes.transformation.column_ops import ColumnOpsProcessor
-from app.nodes.transformation.custom_python import CustomPythonProcessor
-from app.nodes.transformation.join import JoinProcessor
+# ── Big Data ─────────────────────────────────────────────────────────────────
+from app.nodes.big_data.processing import (
+    ChunkProcessingProcessor,
+    LargeDatasetProfilerProcessor,
+    MapReduceAggregationProcessor,
+    SparkLikeGroupByProcessor,
+)
 
-# ── ML ────────────────────────────────────────────────────────────────────────
-from app.nodes.ml.train_test_split import TrainTestSplitProcessor
-from app.nodes.ml.ml_model import MLModelProcessor
-
-# ── Visualization ─────────────────────────────────────────────────────────────
-from app.nodes.visualization.statistics_chart import StatisticsChartProcessor
-from app.nodes.visualization.anomaly_chart import AnomalyChartProcessor
-from app.nodes.visualization.correlation_chart import CorrelationChartProcessor
-from app.nodes.visualization.distribution_chart import DistributionChartProcessor
+# ── Utility ──────────────────────────────────────────────────────────────────
+from app.nodes.utility.route_node import RouteNodeProcessor
 
 # ── Output ───────────────────────────────────────────────────────────────────
 from app.nodes.output.dashboard_builder import DashboardBuilderProcessor
 from app.nodes.output.report_builder import ReportBuilderProcessor
-from app.nodes.output.ai_insights import AIInsightsProcessor
-from app.nodes.output.data_export import DataExportProcessor
+
+# ── ML & visualization ───────────────────────────────────────────────────────
+from app.nodes.ml.train_test_split import TrainTestSplitProcessor
+from app.nodes.ml.ml_model import MLModelProcessor
+from app.nodes.visualization.generic_chart import GenericChartProcessor
 
 
 NODE_REGISTRY: dict[str, BaseNodeProcessor] = {
@@ -59,35 +58,81 @@ NODE_REGISTRY: dict[str, BaseNodeProcessor] = {
     "duplicate_detection":      DuplicateDetectionProcessor(),
     "filter_rows":              FilterRowsProcessor(),
 
+    # Transformation
+    "join_node":                JoinProcessor(),
+
     # Analysis
     "statistics":               StatisticsProcessor(),
     "anomaly_detection":        AnomalyDetectionProcessor(),
+    "ccsg_sg_anomaly":          CCSGSGAnomalyProcessor(),
     "correlation":              CorrelationProcessor(),
     "distribution":             DistributionProcessor(),
     "time_series":              TimeSeriesProcessor(),
 
-    # Transformation
-    "normalize":                NormalizeProcessor(),
-    "encode":                   EncodeProcessor(),
-    "pivot":                    PivotProcessor(),
-    "group_by":                 GroupByProcessor(),
-    "column_ops":               ColumnOpsProcessor(),
-    "custom_python":            CustomPythonProcessor(),
-    "join":                     JoinProcessor(),
+    # Big data
+    "chunk_processing":         ChunkProcessingProcessor(),
+    "mapreduce_aggregation":    MapReduceAggregationProcessor(),
+    "spark_groupby":            SparkLikeGroupByProcessor(),
+    "large_dataset_profiler":   LargeDatasetProfilerProcessor(),
 
-    # ML
+    # Utility
+    "route_node":               RouteNodeProcessor(),
+
+    # Machine learning
     "train_test_split":         TrainTestSplitProcessor(),
     "ml_model":                 MLModelProcessor(),
 
-    # Visualization
-    "statistics_chart":         StatisticsChartProcessor(),
-    "anomaly_chart":            AnomalyChartProcessor(),
-    "correlation_chart":        CorrelationChartProcessor(),
-    "distribution_chart":       DistributionChartProcessor(),
+    # Charts
+    "bar_chart":                GenericChartProcessor(),
+    "clustered_bar_chart":      GenericChartProcessor(),
+    "stacked_bar_chart":        GenericChartProcessor(),
+    "overlapping_bars":         GenericChartProcessor(),
+    "horizontal_bar_chart":     GenericChartProcessor(),
+    "dumbbell_chart":           GenericChartProcessor(),
+    "diverging_bar_chart":      GenericChartProcessor(),
+    "small_multiples":          GenericChartProcessor(),
+    "line_chart":               GenericChartProcessor(),
+    "area_chart":               GenericChartProcessor(),
+    "dual_axis_chart":          GenericChartProcessor(),
+    "stream_graph":             GenericChartProcessor(),
+    "connected_scatter_plot":   GenericChartProcessor(),
+    "slope_chart":              GenericChartProcessor(),
+    "pie_chart":                GenericChartProcessor(),
+    "donut_chart":              GenericChartProcessor(),
+    "sunburst":                 GenericChartProcessor(),
+    "alluvial_diagram":         GenericChartProcessor(),
+    "radar_chart":              GenericChartProcessor(),
+    "polar_area_chart":         GenericChartProcessor(),
+    "scatter_plot":             GenericChartProcessor(),
+    "bubble_chart":             GenericChartProcessor(),
+    "heatmap":                  GenericChartProcessor(),
+    "histogram":                GenericChartProcessor(),
+    "box_plot":                 GenericChartProcessor(),
+    "violin_plot":              GenericChartProcessor(),
+    "beeswarm_plot":            GenericChartProcessor(),
+    "density_heatmap":          GenericChartProcessor(),
+    "convex_hull_chart":        GenericChartProcessor(),
+    "word_cloud":               GenericChartProcessor(),
+    "parallel_coordinates":     GenericChartProcessor(),
+    "kpi_card":                 GenericChartProcessor(),
+    "kpi_grid":                 GenericChartProcessor(),
+    "stat_card":                GenericChartProcessor(),
+    "missing_values_bar":       GenericChartProcessor(),
+    "duplicate_rate_card":      GenericChartProcessor(),
+    "correlation_network":      GenericChartProcessor(),
+    "treemap":                  GenericChartProcessor(),
+    "dot_map":                  GenericChartProcessor(),
+    "choropleth_map":           GenericChartProcessor(),
+    "bubble_map":               GenericChartProcessor(),
+    "cartogram":                GenericChartProcessor(),
+    "dorling_cartogram":        GenericChartProcessor(),
+    "connection_map":           GenericChartProcessor(),
+    "network_diagram":          GenericChartProcessor(),
+    "circular_graph":           GenericChartProcessor(),
+    "arc_diagram":              GenericChartProcessor(),
+    "time_based_network_diagram": GenericChartProcessor(),
 
     # Output
     "dashboard":                DashboardBuilderProcessor(),
     "report":                   ReportBuilderProcessor(),
-    "ai_insights":              AIInsightsProcessor(),
-    "data_export":              DataExportProcessor(),
 }

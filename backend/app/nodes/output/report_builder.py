@@ -47,6 +47,10 @@ class ReportBuilderProcessor(BaseNodeProcessor):
             "anomaly_summary":  "anomaly_detection",
             "correlation_matrix":"correlation",
             "distributions":    "distribution",
+            "chunk_summary":    "chunk_processing",
+            "mapreduce_summary":"mapreduce_aggregation",
+            "spark_groupby_summary":"spark_groupby",
+            "profiler_summary": "large_dataset_profiler",
         }
 
         import pandas as pd

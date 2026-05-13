@@ -11,10 +11,11 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.config import settings
-from app.core.execution_engine import WorkflowExecutionEngine, _compute_node_hash
+from app.core.execution_engine import WorkflowExecutionEngine
 from app.dependencies import get_current_user, get_supabase
 from app.schemas.execution import ExecutionStatusResponse, NodeResultResponse
+from app.services.workspace_service import log_activity
+from app.services.workspace_service import require_workspace_member
 
 router = APIRouter()
 
@@ -29,30 +30,47 @@ async def run_workflow(
     supabase=Depends(get_supabase),
 ):
     """Start a workflow execution. Returns execution_id immediately."""
-    # Verify ownership
-    wf_result = (
-        supabase.table("workflows")
-        .select("id, graph_data, name")
-        .eq("id", workflow_id)
-        .eq("user_id", user["id"])
-        .single()
-        .execute()
-    )
+    from app.api.routes.workflows import _has_workflow_permission
+    try:
+        wf_result = (
+            supabase.table("workflows")
+            .select("id, graph_data, name, user_id, workspace_id, project_id")
+            .eq("id", workflow_id)
+            .single()
+            .execute()
+        )
+    except Exception:
+        wf_result = (
+            supabase.table("workflows")
+            .select("id, graph_data, name, user_id")
+            .eq("id", workflow_id)
+            .single()
+            .execute()
+        )
     if not wf_result.data:
         raise HTTPException(404, "Workflow not found")
+
+    allowed, _ = _has_workflow_permission(supabase, user, workflow_id, "edit")
+    if not allowed:
+        raise HTTPException(403, "You do not have permission to run this workflow")
 
     workflow_data = wf_result.data
 
     # Create execution record
     exec_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    supabase.table("workflow_executions").insert({
+    exec_payload = {
         "id": exec_id,
         "workflow_id": workflow_id,
         "user_id": user["id"],
         "status": "pending",
         "created_at": now,
-    }).execute()
+    }
+    if workflow_data.get("workspace_id"):
+        exec_payload["workspace_id"] = workflow_data.get("workspace_id")
+        exec_payload["project_id"] = workflow_data.get("project_id")
+    supabase.table("workflow_executions").insert(exec_payload).execute()
+    log_activity(supabase, workflow_data.get("workspace_id"), user["id"], "workflow.executed", "workflow", workflow_id, {"execution_id": exec_id})
 
     # Seed node results as "pending"
     for node in workflow_data["graph_data"].get("nodes", []):
@@ -161,7 +179,7 @@ async def get_execution_status(
     user: dict = Depends(get_current_user),
     supabase=Depends(get_supabase),
 ):
-    exec_row = _get_execution(execution_id, user["id"], supabase)
+    exec_row = _get_execution_for_dashboard_access(execution_id, user, supabase, "view")
     node_rows = (
         supabase.table("node_execution_results")
         .select("*")
@@ -180,6 +198,39 @@ async def get_execution_status(
     )
 
 
+@router.get("/{execution_id}/export-permission")
+async def get_export_permission(
+    execution_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    _get_execution_for_dashboard_access(execution_id, user, supabase, "export")
+    return {"allowed": True, "reason": "owner", "denied": []}
+
+
+@router.get("/{execution_id}/compare/{other_id}")
+async def compare_executions(
+    execution_id: str,
+    other_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    left = _get_execution(execution_id, user["id"], supabase)
+    right = _get_execution(other_id, user["id"], supabase)
+    left_nodes = _node_rows(supabase, execution_id)
+    right_nodes = _node_rows(supabase, other_id)
+    return {
+        "left": _execution_summary(left, left_nodes),
+        "right": _execution_summary(right, right_nodes),
+        "diff": {
+            "status_changed": left.get("status") != right.get("status"),
+            "duration_delta_seconds": _duration_seconds(left) - _duration_seconds(right),
+            "node_count_delta": len(left_nodes) - len(right_nodes),
+            "error_delta": _error_count(left_nodes) - _error_count(right_nodes),
+        },
+    }
+
+
 @router.get("/{execution_id}/results/{node_id}", response_model=NodeResultResponse)
 async def get_node_result(
     execution_id: str,
@@ -188,7 +239,7 @@ async def get_node_result(
     supabase=Depends(get_supabase),
 ):
     # Verify ownership via execution
-    _get_execution(execution_id, user["id"], supabase)
+    _get_execution_for_dashboard_access(execution_id, user, supabase, "view")
 
     row = (
         supabase.table("node_execution_results")
@@ -248,19 +299,69 @@ async def generate_ai_summary(
         node_results=node_result.data or [],
     )
 
-    language: str = (payload or {}).get("language", "English")
+    raw_language: str = (payload or {}).get("language", "English")
+    language = "Turkish" if str(raw_language).lower().startswith("tr") else "English"
     provider: str = (payload or {}).get("provider", "gemini")
+    dashboard_context = _build_dashboard_ai_context(exec_row, node_result.data or [], language)
 
     from app.config import settings
     processor = AIInsightsProcessor()
-    prompt = processor._full_prompt(_build_prompt(report_data), language)
+    prompt = processor._full_prompt(
+        _build_prompt(report_data)
+        + "\n\nDashboard context for structured analysis:\n"
+        + json.dumps(dashboard_context, ensure_ascii=False, indent=2),
+        language,
+    )
 
-    if provider == "openai":
-        insights = processor._call_openai(prompt, settings.OPENAI_API_KEY)
-    else:
-        insights = processor._call_gemini(prompt, settings.GEMINI_API_KEY)
+    try:
+        if provider == "openai":
+            insights = processor._call_openai(prompt, settings.OPENAI_API_KEY)
+        else:
+            insights = processor._call_gemini(prompt, settings.GEMINI_API_KEY)
+    except Exception:
+        insights = _fallback_execution_insights(report_data, language)
 
     return {"insights": insights}
+
+
+def _build_dashboard_ai_context(exec_row: Dict[str, Any], node_rows: list, language: str) -> Dict[str, Any]:
+    columns = []
+    filters = []
+    existing_charts = []
+    chart_count = 0
+    for row in node_rows:
+        output = row.get("output_json") or {}
+        metadata = output.get("metadata") or {}
+        if isinstance(metadata.get("columns"), list):
+            columns = metadata["columns"]
+        dashboard_config = output.get("dashboard_config") or {}
+        if isinstance(dashboard_config, dict):
+            filters = dashboard_config.get("filters") or filters
+            panels = dashboard_config.get("panels") or []
+            if isinstance(panels, list):
+                existing_charts = [
+                    {
+                        "id": panel.get("id"),
+                        "type": panel.get("type"),
+                        "title": panel.get("title"),
+                        "description": panel.get("description"),
+                        "layout": panel.get("layout"),
+                    }
+                    for panel in panels
+                    if isinstance(panel, dict)
+                ]
+                chart_count = len(existing_charts)
+    return {
+        "language": "tr" if language == "Turkish" else "en",
+        "datasetColumnNames": [col.get("name") for col in columns if isinstance(col, dict)],
+        "inferredColumnTypes": columns,
+        "userSelectedFilters": filters,
+        "chartCount": chart_count,
+        "dashboardPageSize": {"width": 1920, "height": 1080},
+        "existingCharts": existing_charts,
+        "workflowId": exec_row.get("workflow_id"),
+        "responsePreference": "Return structured JSON when proposing dashboard or report changes.",
+    }
 
 
 # ── Background task ───────────────────────────────────────────────────────────
@@ -280,57 +381,37 @@ def _execute_workflow_task(
     supabase.table("workflow_executions").update({
         "status": "running", "started_at": now
     }).eq("id", exec_id).execute()
+    exec_user_id = (
+        supabase.table("workflow_executions")
+        .select("user_id")
+        .eq("id", exec_id)
+        .single()
+        .execute()
+        .data or {}
+    ).get("user_id")
 
     def on_node_status(node_id: str, status: str, metrics: Dict):
         """Called after each node completes."""
         _update_node_status(supabase, exec_id, node_id, status, metrics)
 
     try:
-        # Inject workflow_name into report/dashboard nodes
+        # Inject server-only execution context into nodes that need it.
         for node in graph_data.get("nodes", []):
             if node.get("type") in ("report", "dashboard"):
                 node.setdefault("data", {}).setdefault("config", {})["workflow_name"] = workflow_name
+            if node.get("type") == "database_query" and exec_user_id:
+                node.setdefault("data", {}).setdefault("config", {})["_user_id"] = exec_user_id
 
-        # Build cache_store from the most recent successful execution
-        cache_store: Dict[str, Any] = {}
-        try:
-            prev_exec = (
-                supabase.table("workflow_executions")
-                .select("id")
-                .eq("workflow_id", workflow_id)
-                .eq("status", "success")
-                .neq("id", exec_id)
-                .order("completed_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if prev_exec.data:
-                prev_id = prev_exec.data[0]["id"]
-                prev_nodes = (
-                    supabase.table("node_execution_results")
-                    .select("config_hash, output_json")
-                    .eq("execution_id", prev_id)
-                    .execute()
-                )
-                for row in (prev_nodes.data or []):
-                    if row.get("config_hash") and row.get("output_json"):
-                        cache_store[row["config_hash"]] = row["output_json"]
-        except Exception:
-            pass  # Cache building is best-effort; never block execution
-
-        engine = WorkflowExecutionEngine(graph_data, exec_id, on_node_status, cache_store=cache_store)
+        engine = WorkflowExecutionEngine(graph_data, exec_id, on_node_status)
         summary = engine.execute()
 
-        # Persist serializable outputs, config hashes, and error messages
+        # Persist serializable outputs and error messages
         for node_id, node_summary in summary.items():
             output_json = _serialize_node_output(engine.node_outputs.get(node_id, {}))
-            patch: Dict[str, Any] = {
+            patch = {
                 "output_json": output_json,
                 "metrics": node_summary.get("metrics", {}),
             }
-            # Store the config hash for future cache lookups
-            if node_id in engine.node_hashes:
-                patch["config_hash"] = engine.node_hashes[node_id]
             if node_summary.get("error"):
                 patch["error_message"] = node_summary["error"]
             supabase.table("node_execution_results").update(patch).eq("execution_id", exec_id).eq("node_id", node_id).execute()
@@ -361,19 +442,58 @@ def _update_node_status(supabase, exec_id: str, node_id: str, status: str, metri
 
 
 def _serialize_node_output(output: Dict[str, Any]) -> Dict[str, Any]:
-    """Strip non-serializable objects (DataFrames) from node output for DB storage."""
+    """Strip non-serializable objects (DataFrames, Timestamps) from node output for DB storage."""
     import pandas as pd
+    import numpy as np
+    import math
+
+    def safe_json(value):
+        if isinstance(value, dict):
+            return {str(k): safe_json(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [safe_json(item) for item in value]
+        if isinstance(value, tuple):
+            return [safe_json(item) for item in value]
+        if isinstance(value, (pd.Timestamp, np.datetime64)):
+            return str(value) if pd.notna(value) else None
+        if value is pd.NaT:
+            return None
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float):
+            return value if math.isfinite(value) else None
+        try:
+            if pd.isna(value):
+                return None
+        except Exception:
+            pass
+        return value
+
     result = {}
     for key, val in output.items():
         if isinstance(val, pd.DataFrame):
+            sample = val.head(5).where(pd.notnull(val.head(5)), None).to_dict("records")
             result[key] = {
                 "_type": "dataframe",
                 "rows": len(val),
                 "columns": list(val.columns),
-                "sample": val.head(5).fillna("").to_dict("records"),
+                "sample": safe_json(sample),
             }
-        elif isinstance(val, (str, int, float, bool, list, dict)) or val is None:
-            result[key] = val
+        elif isinstance(val, (str, int, float, bool, list, dict, tuple)) or val is None:
+            result[key] = safe_json(val)
+        elif isinstance(val, (pd.Timestamp, np.datetime64, pd.NaT)):
+            result[key] = str(val) if pd.notna(val) else None
+        elif isinstance(val, (pd.Series,)):
+            result[key] = val.to_dict()
+        elif hasattr(val, 'item'):  # numpy scalars
+            result[key] = val.item()
+        elif isinstance(val, bytes):
+            result[key] = str(val)[:100]
+        else:
+            try:
+                result[key] = str(val)
+            except Exception:
+                result[key] = None
     return result
 
 
@@ -393,6 +513,70 @@ def _get_execution(exec_id: str, user_id: str, supabase) -> dict:
     return result.data
 
 
+def _get_execution_for_dashboard_access(exec_id: str, user: dict, supabase, permission: str = "view") -> dict:
+    result = (
+        supabase.table("workflow_executions")
+        .select("*")
+        .eq("id", exec_id)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(404, "Execution not found")
+    if result.data.get("user_id") == user.get("id"):
+        return result.data
+    if result.data.get("workspace_id"):
+        require_workspace_member(supabase, user, result.data.get("workspace_id"))
+        return result.data
+    raise HTTPException(403, "You do not have permission to perform this action.")
+
+
+def _node_rows(supabase, execution_id: str) -> list[dict]:
+    return (
+        supabase.table("node_execution_results")
+        .select("*")
+        .eq("execution_id", execution_id)
+        .execute()
+        .data or []
+    )
+
+
+def _execution_summary(row: dict, nodes: list[dict]) -> dict:
+    return {
+        "execution_id": row.get("id"),
+        "workflow_id": row.get("workflow_id"),
+        "status": row.get("status"),
+        "created_at": row.get("created_at"),
+        "started_at": row.get("started_at"),
+        "completed_at": row.get("completed_at"),
+        "duration_seconds": _duration_seconds(row),
+        "node_count": len(nodes),
+        "error_count": _error_count(nodes),
+        "success_count": len([node for node in nodes if node.get("status") == "success"]),
+    }
+
+
+def _duration_seconds(row: dict) -> float:
+    try:
+        start = datetime.fromisoformat(str(row.get("started_at") or row.get("created_at")).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(row.get("completed_at") or row.get("created_at")).replace("Z", "+00:00"))
+        return max(0.0, (end - start).total_seconds())
+    except Exception:
+        return 0.0
+
+
+def _error_count(nodes: list[dict]) -> int:
+    return len([node for node in nodes if node.get("status") == "error" or node.get("error_message")])
+
+
+def _fallback_execution_insights(report_data: dict, language: str) -> str:
+    sections = report_data.get("sections") or []
+    tr = language == "Turkish"
+    if tr:
+        return f"Bu çalıştırmada {len(sections)} analiz bölümü üretildi. Önce eksik değerleri, sonra dağılım ve anomali çıktılarını kontrol edin. AI anahtarı yoksa bu kural tabanlı özet gösterilir."
+    return f"This run produced {len(sections)} analysis sections. Review missing values first, then inspect distributions and anomalies. This rule-based summary is shown when the AI provider is unavailable."
+
+
 def _auto_save_report(
     supabase, exec_id: str, workflow_id: str, workflow_name: str,
     graph_data: Dict, engine
@@ -409,14 +593,19 @@ def _auto_save_report(
         return
 
     # Get user_id from the execution row
-    exec_row = supabase.table("workflow_executions").select("user_id").eq("id", exec_id).single().execute()
-    user_id = (exec_row.data or {}).get("user_id", "dev-user-00000000-0000-0000-0000-000000000000")
+    try:
+        exec_row = supabase.table("workflow_executions").select("user_id, workspace_id, project_id").eq("id", exec_id).single().execute()
+    except Exception:
+        exec_row = supabase.table("workflow_executions").select("user_id").eq("id", exec_id).single().execute()
+    exec_data = exec_row.data or {}
+    user_id = exec_data.get("user_id", "dev-user-00000000-0000-0000-0000-000000000000")
 
     title = report_data.get("title", f"Analysis Report — {workflow_name}")
+    safe_report_data = _serialize_node_output({"report_data": report_data}).get("report_data", report_data)
     now = datetime.now(timezone.utc).isoformat()
 
     try:
-        supabase.table("reports").insert({
+        insert_payload = {
             "id":           str(uuid.uuid4()),
             "execution_id": exec_id,
             "workflow_id":  workflow_id,
@@ -424,8 +613,12 @@ def _auto_save_report(
             "title":        title,
             "format":       "json",
             "storage_path": None,
-            "report_data":  report_data,
+            "report_data":  safe_report_data,
             "created_at":   now,
-        }).execute()
+        }
+        if exec_data.get("workspace_id"):
+            insert_payload["workspace_id"] = exec_data.get("workspace_id")
+            insert_payload["project_id"] = exec_data.get("project_id")
+        supabase.table("reports").insert(insert_payload).execute()
     except Exception:
         pass  # Never crash the execution because of report saving

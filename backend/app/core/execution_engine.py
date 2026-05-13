@@ -12,8 +12,6 @@ Status updates are persisted to Supabase so the SSE stream can pick them up.
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import traceback
 import uuid
 from collections import defaultdict, deque
@@ -23,18 +21,6 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 
 from app.core.node_registry import NODE_REGISTRY
-
-
-# ─── Hash helper ──────────────────────────────────────────────────────────────
-
-def _compute_node_hash(node_type: str, config: dict, input_hashes: list) -> str:
-    """Deterministic hash for a node based on its type, config, and upstream hashes."""
-    payload = json.dumps(
-        {"t": node_type, "c": config, "i": sorted(input_hashes)},
-        sort_keys=True,
-        default=str,
-    )
-    return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
 # ─── Graph helpers ────────────────────────────────────────────────────────────
@@ -73,97 +59,22 @@ def topological_sort(node_ids: List[str], edges: List[Dict]) -> List[str]:
     return result
 
 
-# Output node types that need the full upstream chain of analysis results
-_OUTPUT_NODE_TYPES = {"dashboard", "report", "ai_insights"}
-
-# Nodes that use targetHandle to distinguish multiple inputs
-_MULTI_INPUT_NODE_TYPES = {"join"}
-
-
-def gather_inputs(
-    node_id: str,
-    node_type: str,
-    edges: List[Dict],
-    node_outputs: Dict[str, Any],
-) -> Dict[str, Any]:
+def gather_inputs(node_id: str, edges: List[Dict], node_outputs: Dict[str, Any]) -> Dict[str, Any]:
     """
-    For regular nodes: collect from direct upstream (single-input).
-    For output nodes: walk full upstream chain via BFS, merge all outputs.
-    For multi-input nodes (join): route each edge's dataframe to its targetHandle key.
+    Collect outputs from all upstream nodes that connect to this node.
+    Uses targetHandle as the key so multi-input nodes can differentiate ports.
     """
-    if node_type in _OUTPUT_NODE_TYPES:
-        return _gather_upstream_chain(node_id, edges, node_outputs)
-
     inputs: Dict[str, Any] = {}
     for edge in edges:
-        if edge["target"] != node_id:
-            continue
-        upstream_output = node_outputs.get(edge["source"], {})
-        if not isinstance(upstream_output, dict):
-            continue
-
-        target_handle = edge.get("targetHandle") or "dataframe"
-
-        if node_type in _MULTI_INPUT_NODE_TYPES and target_handle != "dataframe":
-            # Route the upstream dataframe to the named handle (e.g. "left_df", "right_df")
-            df = upstream_output.get("dataframe")
-            if df is not None:
-                inputs[target_handle] = df
-        else:
-            inputs.update(upstream_output)
-
-    return inputs
-
-
-def _gather_upstream_chain(
-    node_id: str,
-    edges: List[Dict],
-    node_outputs: Dict[str, Any],
-) -> Dict[str, Any]:
-    """BFS backward from node_id, merge all ancestor outputs.
-    chart_panel entries are collected into a chart_panels list.
-    """
-    visited: set = set()
-    queue: deque = deque()
-    merged: Dict[str, Any] = {}
-    chart_panels_list: List[Dict] = []
-
-    # Seed with direct parents
-    for edge in edges:
         if edge["target"] == node_id:
-            queue.append(edge["source"])
-
-    while queue:
-        nid = queue.popleft()
-        if nid in visited:
-            continue
-        visited.add(nid)
-
-        output = node_outputs.get(nid, {})
-        if isinstance(output, dict):
-            for k, v in output.items():
-                if k == "dataframe":
-                    # Keep the most downstream dataframe (first encountered)
-                    if "dataframe" not in merged:
-                        merged["dataframe"] = v
-                elif k == "chart_panel":
-                    # Collect ALL chart panels into a list
-                    if isinstance(v, dict):
-                        chart_panels_list.append(v)
-                else:
-                    # First-seen wins (closest upstream takes priority)
-                    if k not in merged:
-                        merged[k] = v
-
-        # Continue BFS upstream
-        for edge in edges:
-            if edge["target"] == nid:
-                queue.append(edge["source"])
-
-    if chart_panels_list:
-        merged["chart_panels"] = chart_panels_list
-
-    return merged
+            upstream_output = node_outputs.get(edge["source"], {})
+            handle = edge.get("targetHandle") or "dataframe"
+            # Merge upstream outputs; handle-keyed access takes priority
+            if isinstance(upstream_output, dict):
+                inputs.update(upstream_output)
+                val = upstream_output.get(handle)
+                inputs[handle] = val if val is not None else upstream_output.get("dataframe")
+    return inputs
 
 
 # ─── Execution Engine ─────────────────────────────────────────────────────────
@@ -182,14 +93,12 @@ class WorkflowExecutionEngine:
         workflow_graph: Dict[str, Any],
         execution_id: str,
         on_node_status: Optional[Callable[[str, str, Dict], None]] = None,
-        cache_store: Optional[Dict[str, Dict]] = None,
     ):
         """
         Args:
             workflow_graph: {"nodes": [...], "edges": [...]}
             execution_id:   UUID of the workflow_executions row
             on_node_status: callback(node_id, status, metrics) called after each node
-            cache_store:    {config_hash: output_json} from previous execution for caching
         """
         self.nodes: Dict[str, Dict] = {n["id"]: n for n in workflow_graph.get("nodes", [])}
         self.edges: List[Dict] = workflow_graph.get("edges", [])
@@ -200,10 +109,6 @@ class WorkflowExecutionEngine:
         self.node_outputs: Dict[str, Any] = {}
         self.node_metrics: Dict[str, Dict] = {}
         self.errors: Dict[str, str] = {}
-
-        # Hash-based result caching
-        self.node_hashes: Dict[str, str] = {}
-        self.cache_store: Dict[str, Dict] = cache_store if cache_store is not None else {}
 
     # ── Public API ────────────────────────────────────────────
 
@@ -230,23 +135,6 @@ class WorkflowExecutionEngine:
         node_type = node.get("type", "unknown")
         config = node.get("data", {}).get("config", {})
 
-        # Compute hash for cache lookup
-        upstream_ids = [e["source"] for e in self.edges if e["target"] == node_id]
-        input_hashes = [self.node_hashes.get(uid, "") for uid in upstream_ids]
-        node_hash = _compute_node_hash(node_type, config, input_hashes)
-        self.node_hashes[node_id] = node_hash
-
-        # Check cache before executing
-        if node_hash in self.cache_store:
-            cached = self.cache_store[node_hash]
-            self.node_outputs[node_id] = cached
-            metrics = self._extract_metrics(cached, node_type)
-            metrics["cached"] = True
-            self.node_metrics[node_id] = metrics
-            self.on_node_status(node_id, "running", {})
-            self.on_node_status(node_id, "success", metrics)
-            return
-
         # Notify: starting
         self.on_node_status(node_id, "running", {})
 
@@ -255,16 +143,13 @@ class WorkflowExecutionEngine:
             if processor is None:
                 raise ValueError(f"No processor registered for node type '{node_type}'")
 
-            inputs = gather_inputs(node_id, node_type, self.edges, self.node_outputs)
+            inputs = gather_inputs(node_id, self.edges, self.node_outputs)
             output = processor.execute(inputs, config)
 
             # Cache output — strip non-serializable DataFrames before storing metrics
             self.node_outputs[node_id] = output
             metrics = self._extract_metrics(output, node_type)
             self.node_metrics[node_id] = metrics
-
-            # Store in cache for future runs
-            self.cache_store[node_hash] = output
 
             self.on_node_status(node_id, "success", metrics)
 

@@ -140,6 +140,14 @@ function genNode(
       }
       return `${comment}\n# Anomaly Detection (${method})\n${out} = ${inDf}.copy()\n${detect}\n${out}["_is_anomaly"] = _anomaly_mask\nprint(f"Anomalies found: {_anomaly_mask.sum()}")\n`
     }
+    case 'ccsg_sg_anomaly': {
+      const window = Number(cfg.window ?? 30)
+      const beta = Number(cfg.beta ?? 8.0)
+      const tau = Number(cfg.tau ?? 1.0)
+      const threshold = Number(cfg.threshold ?? 2.0)
+      const ridge = Number(cfg.ridge ?? 0.000001)
+      return `${comment}\n# CCSG-SG: Conformal Copula Surprise with Stability Gating\n${out} = ${inDf}.copy()\nfrom scipy.stats import norm as _norm\n_num = ${inDf}.select_dtypes('number').copy()\n_num = _num.fillna(_num.median()).fillna(0.0)\n_n = len(_num)\n_ranks = _num.rank(method='average').to_numpy(dtype=float)\nU = np.clip(_ranks / (_n + 1.0), 1e-6, 1 - 1e-6)  # 1. U_t\nZ = _norm.ppf(U)\n_d = Z.shape[1]\nif _d <= 1:\n    alpha = np.zeros(_n)\nelse:\n    R = np.nan_to_num(np.corrcoef(Z, rowvar=False), nan=0.0, posinf=0.0, neginf=0.0)\n    np.fill_diagonal(R, 1.0)\n    R = R + np.eye(_d) * ${ridge}\n    sign, logdet = np.linalg.slogdet(R)\n    invR = np.linalg.pinv(R)\n    log_c = -0.5 * logdet - 0.5 * np.einsum('ij,jk,ik->i', Z, invR - np.eye(_d), Z)\n    alpha = -log_c  # 2. alpha_t = -log(c(U_t))\np_values, surprise, stability, gate, A = [], [], [], [], []\nfor t in range(_n):\n    hist = alpha[max(0, t - ${window}):t]\n    p_t = (1 + int(np.sum(hist >= alpha[t]))) / (len(hist) + 1)  # 3. conformal p-value\n    S_t = -np.log(max(p_t, 1e-12))  # 4. surprise\n    last = alpha[max(0, t - ${window} + 1):t + 1]\n    sigma2_t = float(np.var(last)) if len(last) > 1 else 0.0  # 5. stability\n    G_t = 1 / (1 + np.exp(np.clip(${beta} * (sigma2_t - ${tau}), -60, 60)))  # 6. gate\n    A_t = G_t * S_t  # 7. final score\n    p_values.append(p_t); surprise.append(S_t); stability.append(sigma2_t); gate.append(G_t); A.append(A_t)\n${out}['_ccsg_sg_score'] = A\n${out}['_is_ccsg_sg_anomaly'] = np.array(A) >= ${threshold}\nprint(f"CCSG-SG anomalies found: {${out}['_is_ccsg_sg_anomaly'].sum()}")\n`
+    }
     case 'correlation': {
       const method = String(cfg.method ?? 'pearson')
       const thresh = Number(cfg.threshold ?? 0.7)
@@ -207,14 +215,10 @@ function genNode(
       return `${comment}\n# Custom Python\ndef _custom_transform(df):\n${indented}\n    return df_out\n${out} = _custom_transform(${inDf})\n`
     }
     case 'join': {
-      // For join, find both input edges
-      const leftEdge = edges.find((e) => e.target === node.id && e.targetHandle === 'left_df')
-      const rightEdge = edges.find((e) => e.target === node.id && e.targetHandle === 'right_df')
-      const leftDf = leftEdge ? (varMap.get(leftEdge.source) ?? 'df_left') : 'df_left'
-      const rightDf = rightEdge ? (varMap.get(rightEdge.source) ?? 'df_right') : 'df_right'
+      const rightDf = String(cfg.right_dataframe ?? 'df_right')
       const how = String(cfg.how ?? 'inner')
       const on = cfg.on ? `on="${cfg.on}"` : `left_on="${cfg.left_on ?? ''}", right_on="${cfg.right_on ?? ''}"`
-      return `${comment}\n# Join (${how})\n${out} = pd.merge(${leftDf}, ${rightDf}, how="${how}", ${on})\nprint(f"Join output: {len(${out})} rows")\n`
+      return `${comment}\n# Join (${how})\n${out} = pd.merge(${inDf}, ${rightDf}, how="${how}", ${on})\nprint(f"Join output: {len(${out})} rows")\n`
     }
     case 'time_series': {
       const dateCol = String(cfg.date_column ?? 'date')

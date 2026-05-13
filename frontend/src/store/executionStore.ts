@@ -30,7 +30,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
     for (const ns of status.node_statuses || []) {
       nodeStatuses[ns.node_id] = ns.status
     }
-    set({ status, nodeStatuses, isRunning: status.status === 'running' })
+    set({ status, nodeStatuses, isRunning: status.status === 'pending' || status.status === 'running' })
   },
 
   updateNodeStatus: (nodeId, status) =>

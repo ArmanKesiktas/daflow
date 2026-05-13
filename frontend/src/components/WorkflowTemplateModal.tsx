@@ -1,146 +1,76 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { workflowsApi } from '../api/workflows'
 import toast from 'react-hot-toast'
+import { templatesApi } from '../api/platform'
+import { useWorkspace } from '../features/workspaces/WorkspaceContext'
+import type { WorkflowTemplate } from '../types/workflow'
+import { useI18n } from '../i18n'
+import { Background, BackgroundVariant, ReactFlow, type Edge, type Node } from '@xyflow/react'
+import { nodeTypes } from './nodes/nodeTypes'
 
-// ── Template definitions ──────────────────────────────────────────────────────
-
-interface Template {
-  id: string
-  name: string
-  description: string
-  icon: string
-  color: string
-  nodes: unknown[]
-  edges: unknown[]
+interface Props {
+  onClose: () => void
 }
-
-const uuid = () => crypto.randomUUID()
-
-function makeEdge(source: string, target: string, sh = 'dataframe', th = 'dataframe') {
-  return { id: uuid(), source, target, sourceHandle: sh, targetHandle: th, type: 'smoothstep' }
-}
-
-function makeNode(id: string, type: string, label: string, category: string, x: number, y: number, config = {}) {
-  return { id, type, position: { x, y }, data: { label, category, config, status: 'idle' } }
-}
-
-const TEMPLATES: Template[] = [
-  {
-    id: 'blank',
-    name: 'Blank Workflow',
-    description: 'Start from scratch with an empty canvas.',
-    icon: '○',
-    color: 'bg-black/[0.06] dark:bg-white/[0.07]',
-    nodes: [],
-    edges: [],
-  },
-  {
-    id: 'quick_eda',
-    name: 'Quick EDA',
-    description: 'Upload a file and instantly get descriptive statistics, distribution charts, and a dashboard.',
-    icon: '∿',
-    color: 'bg-[#0071E3]',
-    nodes: (() => {
-      const n = [
-        makeNode('n1', 'file_upload',   'File Upload',           'source',      80,  200),
-        makeNode('n2', 'statistics',    'Statistics',            'analysis',    350, 120, {}),
-        makeNode('n3', 'distribution',  'Distribution',          'analysis',    350, 260, { bins: 20 }),
-        makeNode('n4', 'dashboard',     'Dashboard',             'output',      620, 200, { title: 'Quick EDA Dashboard' }),
-      ]
-      return n
-    })(),
-    edges: (() => {
-      const ids = { n1: 'n1', n2: 'n2', n3: 'n3', n4: 'n4' }
-      return [
-        makeEdge(ids.n1, ids.n2),
-        makeEdge(ids.n1, ids.n3),
-        makeEdge(ids.n2, ids.n4),
-        makeEdge(ids.n3, ids.n4),
-      ]
-    })(),
-  },
-  {
-    id: 'anomaly_pipeline',
-    name: 'Anomaly Detection Pipeline',
-    description: 'Clean data, detect outliers with IQR method, and visualize anomalies in a dashboard.',
-    icon: '△',
-    color: 'bg-[#FF453A]',
-    nodes: (() => {
-      return [
-        makeNode('n1', 'file_upload',       'File Upload',        'source',      80,  200),
-        makeNode('n2', 'missing_value',     'Missing Values',     'preparation', 320, 120, { strategy: 'fill_median' }),
-        makeNode('n3', 'anomaly_detection', 'Anomaly Detection',  'analysis',    320, 260, { method: 'iqr', iqr_multiplier: 1.5 }),
-        makeNode('n4', 'statistics',        'Statistics',         'analysis',    560, 120),
-        makeNode('n5', 'dashboard',         'Dashboard',          'output',      800, 200, { title: 'Anomaly Dashboard' }),
-      ]
-    })(),
-    edges: (() => {
-      return [
-        makeEdge('n1', 'n2'),
-        makeEdge('n2', 'n3'),
-        makeEdge('n2', 'n4'),
-        makeEdge('n3', 'n5'),
-        makeEdge('n4', 'n5'),
-      ]
-    })(),
-  },
-  {
-    id: 'full_analysis',
-    name: 'Full Analysis',
-    description: 'Complete pipeline: type detection, missing values, duplicates, statistics, anomaly, correlation, and report.',
-    icon: 'σ',
-    color: 'bg-[#30D158]',
-    nodes: (() => {
-      return [
-        makeNode('n1',  'file_upload',           'File Upload',           'source',      80,   300),
-        makeNode('n2',  'column_type_detection', 'Column Types',          'preparation', 320,  120),
-        makeNode('n3',  'missing_value',         'Missing Values',        'preparation', 320,  260, { strategy: 'fill_median' }),
-        makeNode('n4',  'duplicate_detection',   'Duplicates',            'preparation', 320,  400),
-        makeNode('n5',  'statistics',            'Statistics',            'analysis',    580,  120),
-        makeNode('n6',  'anomaly_detection',     'Anomaly Detection',     'analysis',    580,  260, { method: 'iqr' }),
-        makeNode('n7',  'correlation',           'Correlation',           'analysis',    580,  400, { method: 'pearson', threshold: 0.7 }),
-        makeNode('n8',  'distribution',          'Distribution',          'analysis',    580,  540, { bins: 20 }),
-        makeNode('n9',  'report',                'Report',                'output',      860,  300, { title: 'Full Analysis Report' }),
-        makeNode('n10', 'ai_insights',           'AI Insights',           'output',      1120, 300, { provider: 'gemini', language: 'English' }),
-      ]
-    })(),
-    edges: (() => {
-      return [
-        makeEdge('n1', 'n2'), makeEdge('n1', 'n3'), makeEdge('n1', 'n4'),
-        makeEdge('n3', 'n5'), makeEdge('n3', 'n6'), makeEdge('n3', 'n7'), makeEdge('n3', 'n8'),
-        makeEdge('n5', 'n9'), makeEdge('n6', 'n9'), makeEdge('n7', 'n9'), makeEdge('n8', 'n9'),
-        makeEdge('n9', 'n10', 'report_data', 'report_data'),
-      ]
-    })(),
-  },
-]
-
-// ── Modal component ───────────────────────────────────────────────────────────
-
-interface Props { onClose: () => void }
 
 export default function WorkflowTemplateModal({ onClose }: Props) {
-  const [selected, setSelected] = useState<string>('blank')
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
+  const [selectedId, setSelectedId] = useState('')
   const [creating, setCreating] = useState(false)
+  const [category, setCategory] = useState('All')
+  const [search, setSearch] = useState('')
   const navigate = useNavigate()
+  const { lang } = useI18n()
+  const tr = lang === 'tr'
+
+  useEffect(() => {
+    templatesApi.list()
+      .then((items) => {
+        setTemplates(items)
+        setSelectedId(items[0]?.id ?? '')
+      })
+      .catch(() => toast.error(tr ? 'Template listesi yüklenemedi' : 'Templates could not be loaded'))
+  }, [tr])
+
+  const categories = useMemo(() => ['All', ...Array.from(new Set(templates.map((item) => item.category || 'General')))], [templates])
+  const visible = useMemo(() => {
+    const base = category === 'All'
+      ? templates
+      : category === 'Favorites'
+        ? templates.filter((item) => item.is_favorite)
+        : templates.filter((item) => item.category === category)
+    const needle = search.trim().toLowerCase()
+    if (!needle) return base
+    return base.filter((item) => {
+      const haystack = [
+        item.title,
+        item.name,
+        item.description,
+        item.category,
+        ...(item.required_columns ?? []).map(String),
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [category, search, templates])
+  const selected = templates.find((item) => item.id === selectedId)
+  const { activeWorkspaceId } = useWorkspace()
+  const sortedVisible = useMemo(() => {
+    return [...visible].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite) || (b.rating_average ?? 0) - (a.rating_average ?? 0) || a.title.localeCompare(b.title))
+  }, [visible])
+
+  useEffect(() => {
+    if (sortedVisible.length > 0 && !sortedVisible.some((item) => item.id === selectedId)) {
+      setSelectedId(sortedVisible[0].id)
+    }
+  }, [selectedId, sortedVisible])
 
   const handleCreate = async () => {
-    const tpl = TEMPLATES.find((t) => t.id === selected)!
+    if (!selected) return
     setCreating(true)
     try {
-      const wf = await workflowsApi.create({ name: tpl.id === 'blank' ? 'New Workflow' : tpl.name })
-      if (tpl.nodes.length > 0) {
-        await workflowsApi.save(wf.id, {
-          nodes: tpl.nodes as never[],
-          edges: tpl.edges as never[],
-          viewport: { x: 0, y: 0, zoom: 1 },
-          name: tpl.name,
-        })
-      }
+      const wf = await templatesApi.createWorkflow(selected.id, selected.title, activeWorkspaceId)
       navigate(`/workflows/${wf.id}/edit`)
     } catch {
-      toast.error('Failed to create workflow')
+      toast.error(tr ? 'Workflow oluşturulamadı' : 'Failed to create workflow')
       setCreating(false)
     }
   }
@@ -148,60 +78,204 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white">New Workflow</h2>
-          <p className="text-[13px] text-[#1d1d1f]/40 dark:text-white/40 mt-0.5">Start blank or pick a template</p>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-modal-title"
+        className="relative bg-surface rounded-2xl border border-[var(--color-border-default)] shadow-2xl w-full max-w-4xl mx-4 overflow-hidden"
+      >
+        <div className="px-5 pt-5 pb-3 border-b border-[var(--color-border-subtle)]">
+          <h2 id="template-modal-title" className="text-[16px] font-semibold text-[var(--color-text-primary)]">{tr ? 'Template Marketplace' : 'Template Marketplace'}</h2>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">
+            {tr ? "Hazır analiz akışlarından başlayın veya kendi template'lerinizi kaydedin." : 'Start from ready analysis flows or save your own templates.'}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-start">
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setCategory(item)}
+                  className={`h-7 px-2.5 rounded-lg text-[11px] ${category === item ? 'bg-primary text-white' : 'bg-[var(--color-secondary)] text-[var(--color-text-secondary)]'}`}
+                >
+                  {item === 'All' && tr ? 'Tümü' : item}
+                </button>
+              ))}
+              <button
+                onClick={() => setCategory('Favorites')}
+                className={`h-7 px-2.5 rounded-lg text-[11px] ${category === 'Favorites' ? 'bg-primary text-white' : 'bg-[var(--color-secondary)] text-[var(--color-text-secondary)]'}`}
+              >
+                {tr ? 'Favoriler' : 'Favorites'}
+              </button>
+            </div>
+            <div className="h-8 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] flex items-center gap-2 px-3">
+              <svg className="w-3.5 h-3.5 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" />
+              </svg>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={tr ? 'Template ara...' : 'Search templates...'}
+                className="min-w-0 flex-1 bg-transparent outline-none text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Templates */}
-        <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
-          {TEMPLATES.map((tpl) => (
-            <button
-              key={tpl.id}
-              onClick={() => setSelected(tpl.id)}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all ${
-                selected === tpl.id
-                  ? 'border-[#0071E3] bg-[#0071E3]/[0.06]'
-                  : 'border-black/[0.07] dark:border-white/[0.07] hover:border-black/[0.14] dark:hover:border-white/[0.14]'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[18px] flex-shrink-0 ${tpl.id === 'blank' ? 'bg-black/[0.06] dark:bg-white/[0.07] text-[#1d1d1f]/40 dark:text-white/40' : `${tpl.color} text-white`}`}>
-                {tpl.icon}
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-0">
+          <div className="p-3 grid sm:grid-cols-2 gap-2 max-h-[440px] overflow-y-auto">
+            {sortedVisible.length === 0 && (
+              <div className="sm:col-span-2 h-44 rounded-xl border border-dashed border-[var(--color-border-default)] bg-[var(--color-secondary)]/50 flex flex-col items-center justify-center text-center px-6">
+                <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">{tr ? 'Template bulunamadı' : 'No templates found'}</p>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{tr ? 'Arama kelimesini veya kategori filtresini değiştirin.' : 'Try another search term or category filter.'}</p>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[#1d1d1f] dark:text-white">{tpl.name}</p>
-                <p className="text-[11px] text-[#1d1d1f]/40 dark:text-white/40 leading-snug mt-0.5">{tpl.description}</p>
-              </div>
-              {selected === tpl.id && (
-                <div className="w-5 h-5 rounded-full bg-[#0071E3] flex items-center justify-center flex-shrink-0">
-                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                    <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+            )}
+            {sortedVisible.map((tpl) => (
+              <button
+                key={tpl.id}
+                onClick={() => setSelectedId(tpl.id)}
+                className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all ${
+                  selectedId === tpl.id
+                    ? 'border-primary bg-primary/[0.06]'
+                    : 'border-[var(--color-border-default)] hover:border-[var(--color-border-default)]/80'
+                }`}
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[14px] flex-shrink-0 bg-primary text-white">
+                  {tpl.icon || tpl.title.slice(0, 1)}
                 </div>
-              )}
-            </button>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">{tpl.title || tpl.name}</p>
+                    <span className="text-[11px] text-warning flex-shrink-0">★ {tpl.rating_average || 0}</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-text-muted)] leading-snug mt-0.5 line-clamp-2">{tpl.description}</p>
+                  <div className="flex items-center justify-between mt-2 gap-2">
+                    <p className="text-[10px] text-[var(--color-text-muted)]">{tpl.graph_data?.nodes?.length ?? 0} nodes · {tpl.category}</p>
+                    <span className={`text-[11px] ${tpl.is_favorite ? 'text-warning' : 'text-[var(--color-text-muted)]'}`}>★</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <aside className="border-l border-[var(--color-border-subtle)] p-4 bg-[var(--color-secondary)]/50 max-h-[440px] overflow-y-auto">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--color-text-muted)] mb-2">{tr ? 'Önizleme' : 'Preview'}</p>
+            <h3 className="text-[15px] font-semibold mb-2">{selected?.title || '-'}</h3>
+            <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)] mb-4">{selected?.description}</p>
+
+            {selected && <TemplateGraphPreview template={selected} />}
+
+            {selected && (
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const next = !selected.is_favorite
+                    setTemplates((items) => items.map((item) => item.id === selected.id ? { ...item, is_favorite: next } : item))
+                    try {
+                      if (next) await templatesApi.favorite(selected.id)
+                      else await templatesApi.unfavorite(selected.id)
+                    } catch {
+                      toast.error(tr ? 'Favori güncellenemedi' : 'Favorite could not be updated')
+                    }
+                  }}
+                  className={`h-8 px-3 rounded-lg text-[12px] font-medium ${selected.is_favorite ? 'bg-warning/12 text-warning' : 'bg-[var(--color-secondary)] text-[var(--color-text-secondary)]'}`}
+                >
+                  {selected.is_favorite ? (tr ? 'Favoride' : 'Favorited') : (tr ? 'Favorile' : 'Favorite')}
+                </button>
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    onClick={async () => {
+                      setTemplates((items) => items.map((item) => item.id === selected.id ? { ...item, my_rating: rating, rating_average: rating } : item))
+                      try {
+                        await templatesApi.rate(selected.id, rating)
+                      } catch {
+                        toast.error(tr ? 'Puan kaydedilemedi' : 'Rating could not be saved')
+                      }
+                    }}
+                    className={`w-7 h-7 rounded-lg text-[13px] ${rating <= (selected.my_rating || 0) ? 'text-warning bg-warning/10' : 'text-[var(--color-text-muted)] bg-[var(--color-secondary)]'}`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-2">
+                {tr ? 'Gereken veri' : 'Required data'}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(selected?.required_columns?.length ? selected.required_columns : [tr ? 'CSV veya Excel tablo' : 'CSV or Excel table']).map((item, index) => (
+                  <span key={`${String(item)}-${index}`} className="px-2 h-6 rounded-lg bg-surface border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-secondary)] inline-flex items-center">
+                    {String(item)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+                {tr ? 'Akış düğümleri' : 'Flow nodes'}
+              </p>
+              {(selected?.graph_data?.nodes ?? []).map((node) => (
+                <div key={node.id} className="h-8 rounded-lg bg-surface border border-[var(--color-border-subtle)] px-3 flex items-center justify-between gap-3 text-[11px]">
+                  <span className="truncate">{node.data?.label || node.type}</span>
+                  <span className="text-[var(--color-text-muted)] truncate max-w-[130px]">{node.type}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 h-8 rounded-lg text-[13px] text-[#1d1d1f]/50 dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.07] transition-colors"
-          >
-            Cancel
+        <div className="px-5 py-3 border-t border-[var(--color-border-subtle)] flex items-center justify-end gap-3">
+          <button onClick={onClose} className="px-4 h-8 rounded-lg text-[13px] text-[var(--color-text-secondary)] hover:bg-[var(--color-secondary)]">
+            {tr ? 'İptal' : 'Cancel'}
           </button>
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            className="px-5 h-8 rounded-lg text-[13px] font-medium bg-[#0071E3] hover:bg-[#0077ED] text-white transition-colors disabled:opacity-50"
-          >
-            {creating ? 'Creating…' : 'Create Workflow'}
+          <button onClick={handleCreate} disabled={creating || !selected} className="px-5 h-8 rounded-lg text-[13px] font-medium bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-50">
+            {creating ? (tr ? 'Oluşturuluyor...' : 'Creating...') : (tr ? 'Workflow oluştur' : 'Create Workflow')}
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function TemplateGraphPreview({ template }: { template: WorkflowTemplate }) {
+  const nodes = useMemo<Node[]>(() => (template.graph_data?.nodes ?? []).map((node) => ({
+    ...node,
+    draggable: false,
+    selectable: false,
+    data: {
+      ...node.data,
+      status: 'idle',
+    },
+  })) as Node[], [template])
+  const edges = useMemo<Edge[]>(() => (template.graph_data?.edges ?? []).map((edge) => ({
+    ...edge,
+    animated: false,
+    style: { stroke: '#8AB4F8', strokeWidth: 2.5, opacity: 0.9 },
+  })) as Edge[], [template])
+  return (
+    <div className="h-[210px] rounded-xl overflow-hidden border border-[var(--color-border-default)] bg-page-bg">
+      <ReactFlow
+        key={template.id}
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.22, minZoom: 0.35, maxZoom: 0.9 }}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
+        preventScrolling={false}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={18} size={1.4} color="rgba(142,142,147,0.22)" />
+      </ReactFlow>
     </div>
   )
 }

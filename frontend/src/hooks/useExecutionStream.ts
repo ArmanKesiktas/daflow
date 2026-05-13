@@ -27,7 +27,7 @@ export function useExecutionStream(executionId: string | null) {
         const data: ExecutionStatus = JSON.parse(event.data)
         setStatus(data)
 
-        // Sync node visual statuses in React Flow canvas
+        // Sync node visual statuses in React Flow canvas.
         for (const ns of data.node_statuses || []) {
           updateNodeData(ns.node_id, {
             status: ns.status as NodeStatus,
@@ -36,7 +36,7 @@ export function useExecutionStream(executionId: string | null) {
           })
         }
 
-        if (data.done || data.status === 'success' || data.status === 'error') {
+        if (data.done || data.status === 'success' || data.status === 'error' || data.status === 'cancelled') {
           setRunning(false)
           es.close()
         }

@@ -7,6 +7,7 @@ import pandas as pd
 
 from app.nodes.base import BaseNodeProcessor
 from app.config import settings
+from app.services.secure_share import decrypt_dataset_bytes
 
 # Must match the directory used in files.py
 _DEV_UPLOAD_DIR = Path(tempfile.gettempdir()) / "dataflow_dev_uploads"
@@ -42,8 +43,6 @@ class FileUploadProcessor(BaseNodeProcessor):
         df = self._parse_file(filename, file_bytes)
         columns_meta = self._build_column_meta(df)
 
-        preview_rows = df.head(10).fillna("").astype(str).to_dict("records")
-
         return {
             "dataframe": df,
             "file_id": file_id,
@@ -54,7 +53,6 @@ class FileUploadProcessor(BaseNodeProcessor):
                 "column_count": int(len(df.columns)),
                 "columns": columns_meta,
             },
-            "preview_rows": preview_rows,
         }
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -69,11 +67,13 @@ class FileUploadProcessor(BaseNodeProcessor):
                     f"Dev file not found: {local_path}. "
                     "Please re-upload the file in the Config panel."
                 )
-            return local_path.read_bytes()
+            return decrypt_dataset_bytes(local_path.read_bytes())
         else:
             from app.services.supabase_service import get_supabase_client
             supabase = get_supabase_client()
-            return supabase.storage.from_(settings.STORAGE_BUCKET_DATASETS).download(storage_path)
+            return decrypt_dataset_bytes(
+                supabase.storage.from_(settings.STORAGE_BUCKET_DATASETS).download(storage_path)
+            )
 
     def _parse_file(self, filename: str, file_bytes: bytes) -> pd.DataFrame:
         ext = filename.lower().rsplit(".", 1)[-1]

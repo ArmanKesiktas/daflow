@@ -4,28 +4,31 @@ import { useNavigate } from 'react-router-dom'
 import { BaseNode } from './BaseNode'
 import type { NodeData } from '../../types/workflow'
 import { useExecutionStore } from '../../store/executionStore'
+import { NodePreview } from './NodePreview'
 
-export const ReportNode = memo(function ReportNode({ data, selected }: NodeProps<Node<NodeData>>) {
+export const ReportNode = memo(function ReportNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const title = (data.config as { title?: string }).title || 'Report'
   return (
-    <>
+    <NodePreview nodeId={id} data={data}>
       <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined} error_message={data.error_message} cached={data.cached}>
+      <Handle type="target" position={Position.Left} id="statistics" style={{ top: '60%' }} />
+      <BaseNode label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected}>
         <span>Generates structured PDF report</span>
         {data.status === 'success' && (
           <span className="text-[#30D158]">Report ready</span>
         )}
       </BaseNode>
       <Handle type="source" position={Position.Right} id="report_data" />
-    </>
+    </NodePreview>
   )
 })
 
-export const AIInsightsNode = memo(function AIInsightsNode({ data, selected }: NodeProps<Node<NodeData>>) {
+export const AIInsightsNode = memo(function AIInsightsNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const provider = (data.config as { provider?: string }).provider || 'gemini'
   return (
-    <>
+    <NodePreview nodeId={id} data={data}>
       <Handle type="target" position={Position.Left} id="report_data" />
+      <Handle type="target" position={Position.Left} id="dataframe" style={{ top: '70%' }} />
       <BaseNode
         label="AI Insights"
         icon="◈"
@@ -33,8 +36,6 @@ export const AIInsightsNode = memo(function AIInsightsNode({ data, selected }: N
         color=""
         category={data.category}
         selected={selected}
-        error_message={data.error_message}
-        cached={data.cached}
       >
         <span className="capitalize">Provider: {provider}</span>
         {data.status === 'success' && (
@@ -42,33 +43,22 @@ export const AIInsightsNode = memo(function AIInsightsNode({ data, selected }: N
         )}
       </BaseNode>
       <Handle type="source" position={Position.Right} id="insights" />
-    </>
+    </NodePreview>
   )
 })
 
-export const DataExportNode = memo(function DataExportNode({ data, selected }: NodeProps<Node<NodeData>>) {
-  const fmt = (data.config as { format?: string }).format || 'csv'
-  return (
-    <>
-      <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={data.label} icon="↓" status={data.status} color="" category={data.category} selected={selected} note={data.note ? String(data.note) : undefined} error_message={data.error_message} cached={data.cached}>
-        <span className="uppercase text-[10px] font-semibold">{fmt}</span>
-        {data.status === 'success' && (
-          <span className="text-[#30D158]">Export ready</span>
-        )}
-      </BaseNode>
-    </>
-  )
-})
-
-export const DashboardNode = memo(function DashboardNode({ data, selected }: NodeProps<Node<NodeData>>) {
+export const DashboardNode = memo(function DashboardNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const title = (data.config as { title?: string }).title || 'Dashboard'
   const executionId = useExecutionStore((s) => s.executionId)
   const navigate = useNavigate()
   return (
-    <>
-      <Handle type="target" position={Position.Left} id="dataframe" />
-      <BaseNode label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected} error_message={data.error_message} cached={data.cached}>
+    <NodePreview nodeId={id} data={data}>
+      <Handle type="target" position={Position.Left} id="dataframe" style={{ top: '18%' }} />
+      <Handle type="target" position={Position.Left} id="statistics"      style={{ top: '34%' }} />
+      <Handle type="target" position={Position.Left} id="anomaly_summary"  style={{ top: '50%' }} />
+      <Handle type="target" position={Position.Left} id="correlation_matrix" style={{ top: '66%' }} />
+      <Handle type="target" position={Position.Left} id="distributions"   style={{ top: '82%' }} />
+      <BaseNode label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected}>
         <span>Modular analysis dashboard</span>
         {data.status === 'success' && (
           <>
@@ -79,7 +69,7 @@ export const DashboardNode = memo(function DashboardNode({ data, selected }: Nod
                   e.stopPropagation()
                   navigate(`/dashboard/${executionId}`)
                 }}
-                className="mt-1 px-2 py-0.5 text-[10px] font-medium bg-[#0071E3] text-white rounded-md hover:bg-[#0077ED] transition-colors"
+                className="mt-1 px-2 py-0.5 text-[10px] font-medium bg-[var(--color-primary)] text-white rounded-md hover:bg-[var(--color-primary-hover)] transition-colors"
               >
                 Open Dashboard ↗
               </button>
@@ -87,6 +77,6 @@ export const DashboardNode = memo(function DashboardNode({ data, selected }: Nod
           </>
         )}
       </BaseNode>
-    </>
+    </NodePreview>
   )
 })

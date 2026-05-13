@@ -84,6 +84,7 @@ class TimeSeriesProcessor(BaseNodeProcessor):
 
         # ── Build output df ───────────────────────────────────────────────────
         result_df = df.copy()
+        result_df[date_col] = pd.to_datetime(result_df[date_col], errors="coerce")
         result_df = result_df.merge(
             ts[["date", "rolling_mean", "rolling_std", "trend"]].rename(
                 columns={"date": date_col}),

@@ -13,9 +13,9 @@ function TransformPopup({ title, pos, children }: { title: string; pos: PopupPos
   return createPortal(
     <div
       style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-      className="w-80 bg-white dark:bg-[#1C1C1E] rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-2xl p-4 pointer-events-none -translate-y-1/2"
+      className="w-80 bg-[#ffffff] dark:bg-[#1C1C1E] rounded-2xl border border-[var(--color-border-default)] shadow-2xl p-4 pointer-events-none -translate-y-1/2"
     >
-      <h4 className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white mb-3">{title}</h4>
+      <h4 className="text-[12px] font-semibold text-[var(--color-text-primary)] mb-3">{title}</h4>
       <div className="max-h-60 overflow-hidden">
         {children}
       </div>
@@ -24,11 +24,31 @@ function TransformPopup({ title, pos, children }: { title: string; pos: PopupPos
   )
 }
 
+function PopupState({ state }: { state: 'loading' | 'empty' | string }) {
+  if (state === 'loading') {
+    return (
+      <div className="h-20 flex flex-col items-center justify-center gap-2 text-[var(--color-text-muted)]">
+        <span className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+        <span className="text-[11px]">Loading preview...</span>
+      </div>
+    )
+  }
+  return (
+    <div className={`rounded-lg px-3 py-2 text-[11px] ${
+      state === 'empty'
+        ? 'bg-[var(--color-secondary)] text-[var(--color-text-muted)]'
+        : 'bg-danger/10 border border-danger/20 text-danger'
+    }`}>
+      {state === 'empty' ? 'No preview data was returned for this node yet.' : state}
+    </div>
+  )
+}
+
 function KVRow({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="flex items-center justify-between py-1 border-b border-black/[0.04] dark:border-white/[0.04]">
-      <span className="text-[11px] text-[#1d1d1f]/50 dark:text-white/50">{label}</span>
-      <span className="text-[11px] font-medium text-[#1d1d1f]/80 dark:text-white/80">{String(value)}</span>
+    <div className="flex items-center justify-between py-1 border-b border-[var(--color-border-subtle)]">
+      <span className="text-[11px] text-[var(--color-text-secondary)]">{label}</span>
+      <span className="text-[11px] font-medium text-[var(--color-text-primary)]">{String(value)}</span>
     </div>
   )
 }
@@ -58,7 +78,7 @@ function renderEncode(output: RawOutput, pos: PopupPos) {
       <KVRow label="Columns encoded" value={cols.length} />
       {method === 'onehot' && <KVRow label="New columns created" value={newCols.length} />}
       {cols.slice(0, 5).map((col) => (
-        <div key={col} className="py-0.5 text-[11px] text-[#1d1d1f]/60 dark:text-white/60">{col}</div>
+        <div key={col} className="py-0.5 text-[11px] text-[var(--color-text-secondary)]">{col}</div>
       ))}
     </TransformPopup>
   )
@@ -141,6 +161,8 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
 
     const [nodeOutput, setNodeOutput] = useState<RawOutput | null>(null)
     const [popupPos, setPopupPos] = useState<PopupPos | null>(null)
+    const [loading, setLoading] = useState(false)
+    const [previewError, setPreviewError] = useState<string | null>(null)
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const nodeRef = useRef<HTMLDivElement>(null)
 
@@ -150,11 +172,19 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
         const rect = nodeRef.current.getBoundingClientRect()
         setPopupPos({ top: rect.top + rect.height / 2, left: rect.right + 12 })
       }
+      setLoading(true)
+      setPreviewError(null)
+      setNodeOutput(null)
       timerRef.current = setTimeout(async () => {
         try {
           const result = await executionsApi.getNodeResult(executionId, id)
           if (result.output) setNodeOutput(result.output as RawOutput)
-        } catch { /* silent */ }
+          else setPreviewError(result.error_message || 'Preview could not be loaded.')
+        } catch (exc) {
+          setPreviewError(exc instanceof Error ? exc.message : 'Preview could not be loaded.')
+        } finally {
+          setLoading(false)
+        }
       }, 300)
     }, [executionId, data.status, id])
 
@@ -162,6 +192,8 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
       setNodeOutput(null)
       setPopupPos(null)
+      setLoading(false)
+      setPreviewError(null)
     }, [])
 
     return (
@@ -178,13 +210,23 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
           error_message={data.error_message}
           cached={data.cached}
         >
-          {method && <span className="text-[#1d1d1f]/40 dark:text-white/40 capitalize">{method}</span>}
+          {method && <span className="text-[var(--color-text-muted)] capitalize">{method}</span>}
           {data.status === 'success' && renderPopup && (
-            <span className="text-[#1d1d1f]/20 dark:text-white/20 text-[10px]">Hover to preview</span>
+            <span className="text-[var(--color-text-muted)] text-[10px]">Hover to preview</span>
           )}
         </BaseNode>
         <Handle type="source" position={Position.Right} id="dataframe" />
-        {nodeOutput && popupPos && renderPopup && renderPopup(nodeOutput, popupPos)}
+        {popupPos && renderPopup && (
+          loading ? (
+            <TransformPopup title={data.label} pos={popupPos}><PopupState state="loading" /></TransformPopup>
+          ) : previewError ? (
+            <TransformPopup title={data.label} pos={popupPos}><PopupState state={previewError} /></TransformPopup>
+          ) : nodeOutput ? (
+            renderPopup(nodeOutput, popupPos) ?? <TransformPopup title={data.label} pos={popupPos}><PopupState state="empty" /></TransformPopup>
+          ) : (
+            <TransformPopup title={data.label} pos={popupPos}><PopupState state="empty" /></TransformPopup>
+          )
+        )}
       </div>
     )
   })
@@ -197,12 +239,14 @@ export const GroupByNode      = TransformNodeFactory('≡', renderGroupBy)
 export const ColumnOpsNode    = TransformNodeFactory('✦', renderColumnOps)
 export const CustomPythonNode = TransformNodeFactory('λ', renderCustomPython)
 
-// ── Join node (dual inputs) ────────────────────────────────────────────────────
+// ── Join node ──────────────────────────────────────────────────────────────────
 
 export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const executionId = useExecutionStore((s) => s.executionId)
   const [nodeOutput, setNodeOutput] = useState<RawOutput | null>(null)
   const [popupPos, setPopupPos] = useState<PopupPos | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nodeRef = useRef<HTMLDivElement>(null)
 
@@ -212,11 +256,19 @@ export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps
       const rect = nodeRef.current.getBoundingClientRect()
       setPopupPos({ top: rect.top + rect.height / 2, left: rect.right + 12 })
     }
+    setLoading(true)
+    setPreviewError(null)
+    setNodeOutput(null)
     timerRef.current = setTimeout(async () => {
       try {
         const result = await executionsApi.getNodeResult(executionId, id)
         if (result.output) setNodeOutput(result.output as RawOutput)
-      } catch { /* silent */ }
+        else setPreviewError(result.error_message || 'Preview could not be loaded.')
+      } catch (exc) {
+        setPreviewError(exc instanceof Error ? exc.message : 'Preview could not be loaded.')
+      } finally {
+        setLoading(false)
+      }
     }, 300)
   }, [executionId, data.status, id])
 
@@ -224,13 +276,16 @@ export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
     setNodeOutput(null)
     setPopupPos(null)
+    setLoading(false)
+    setPreviewError(null)
   }, [])
 
   return (
     <div ref={nodeRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ position: 'relative' }}>
-      {/* Two target handles stacked vertically */}
       <Handle type="target" position={Position.Left} id="left_df" style={{ top: '35%' }} />
       <Handle type="target" position={Position.Left} id="right_df" style={{ top: '65%' }} />
+      <span className="absolute text-[9px] font-bold text-[var(--color-text-muted)]" style={{ left: '8px', top: '28%' }}>L</span>
+      <span className="absolute text-[9px] font-bold text-[var(--color-text-muted)]" style={{ left: '8px', top: '58%' }}>R</span>
       <BaseNode
         label={data.label}
         icon="⋈"
@@ -241,13 +296,23 @@ export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps
         note={data.note ? String(data.note) : undefined}
         error_message={data.error_message}
       >
-        <span className="text-[#1d1d1f]/30 dark:text-white/30 text-[10px]">Left · Right</span>
+        <span className="text-[var(--color-text-muted)] text-[10px]">Left / Right inputs</span>
         {data.status === 'success' && (
-          <span className="text-[#1d1d1f]/20 dark:text-white/20 text-[10px]">Hover to preview</span>
+          <span className="text-[var(--color-text-muted)] text-[10px]">Hover to preview</span>
         )}
       </BaseNode>
       <Handle type="source" position={Position.Right} id="dataframe" />
-      {nodeOutput && popupPos && renderJoin(nodeOutput, popupPos)}
+      {popupPos && (
+        loading ? (
+          <TransformPopup title={data.label} pos={popupPos}><PopupState state="loading" /></TransformPopup>
+        ) : previewError ? (
+          <TransformPopup title={data.label} pos={popupPos}><PopupState state={previewError} /></TransformPopup>
+        ) : nodeOutput ? (
+          renderJoin(nodeOutput, popupPos) ?? <TransformPopup title={data.label} pos={popupPos}><PopupState state="empty" /></TransformPopup>
+        ) : (
+          <TransformPopup title={data.label} pos={popupPos}><PopupState state="empty" /></TransformPopup>
+        )
+      )}
     </div>
   )
 })

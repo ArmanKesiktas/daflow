@@ -55,9 +55,9 @@ function ChartPopup({ panel, pos }: { panel: ChartPanelData; pos: PopupPos }) {
   return createPortal(
     <div
       style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-      className="w-96 bg-white dark:bg-[#1C1C1E] rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-2xl p-4 pointer-events-none -translate-y-1/2"
+      className="w-96 bg-[#ffffff] dark:bg-[#1C1C1E] rounded-2xl border border-[var(--color-border-default)] shadow-2xl p-4 pointer-events-none -translate-y-1/2"
     >
-      <h4 className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white mb-3">{panel.title}</h4>
+      <h4 className="text-[12px] font-semibold text-[var(--color-text-primary)] mb-3">{panel.title}</h4>
       <div className="max-h-64 overflow-hidden">
         {renderContent()}
       </div>
@@ -130,7 +130,7 @@ function VisualizationNodeFactory(icon: string) {
             <span className="text-[#5E5CE6] text-[10px]">Loading…</span>
           )}
           {nodeStatus === 'success' && !loading && (
-            <span className="text-[#1d1d1f]/30 dark:text-white/30 text-[10px]">Hover to preview</span>
+            <span className="text-[var(--color-text-muted)] text-[10px]">Hover to preview</span>
           )}
         </BaseNode>
         <Handle type="source" position={Position.Right} id="dataframe" />

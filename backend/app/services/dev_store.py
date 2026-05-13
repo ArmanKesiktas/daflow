@@ -46,7 +46,6 @@ class _Query:
     def __init__(self, table_name: str):
         self._table = table_name
         self._filters: list[tuple[str, Any]] = []
-        self._in_filters: list[tuple[str, list]] = []
         self._insert_row: dict | None = None
         self._upsert_row: dict | None = None
         self._update_patch: dict | None = None
@@ -80,10 +79,6 @@ class _Query:
 
     def eq(self, col: str, val: Any):
         self._filters.append((col, val))
-        return self
-
-    def in_(self, col: str, values: list):
-        self._in_filters.append((col, values))
         return self
 
     def single(self):
@@ -130,7 +125,6 @@ class _Query:
         filtered = [
             r for r in rows
             if all(r.get(col) == val for col, val in self._filters)
-            and all(r.get(col) in vals for col, vals in self._in_filters)
         ]
 
         if self._update_patch is not None:

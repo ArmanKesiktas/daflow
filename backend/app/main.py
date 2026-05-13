@@ -1,20 +1,33 @@
 from contextlib import asynccontextmanager
-import os
+import asyncio
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+import os
 
 from app.api.router import api_router
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    if settings.DEV_MODE:
+        logger.warning("⚠️  DEV_MODE is enabled — authentication is bypassed. Do NOT use in production!")
+    stop_event = asyncio.Event()
+    scheduler_task = None
+    if settings.DEV_MODE:
+        from app.services.scheduler import scheduler_loop
+        scheduler_task = asyncio.create_task(scheduler_loop(stop_event))
     yield
     # Shutdown
+    stop_event.set()
+    if scheduler_task:
+        scheduler_task.cancel()
     print("Shutting down...")
 
 
@@ -27,7 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.all_origins,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,23 +48,11 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 
+static_path = os.path.join(os.path.dirname(__file__), "..", "static_files")
+if os.path.isdir(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
+
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
-
-
-# Serve React frontend (production build) — must be last
-_static_dir = os.path.join(os.path.dirname(__file__), "..", "static_files")
-if os.path.isdir(_static_dir):
-    # Serve hashed JS/CSS/image assets
-    _assets_dir = os.path.join(_static_dir, "assets")
-    if os.path.isdir(_assets_dir):
-        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
-
-    # SPA catch-all: return index.html for every non-API path so React Router
-    # handles client-side navigation even on hard refresh or direct URL access.
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str):
-        return FileResponse(os.path.join(_static_dir, "index.html"))
-

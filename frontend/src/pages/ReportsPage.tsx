@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { reportsApi } from '../api/executions'
 import type { Report } from '../types/workflow'
 import toast from 'react-hot-toast'
-import { useTheme } from '../hooks/useTheme'
 import { useI18n } from '../i18n'
+import { useWorkspace } from '../features/workspaces/WorkspaceContext'
+import LoadingState from '../components/ui/LoadingState'
+import EmptyState from '../components/ui/EmptyState'
 
 interface ReportSummary {
   row_count?: number
@@ -57,15 +59,16 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState('')
   const [formatFilter, setFormatFilter] = useState<'all' | 'json' | 'pdf'>('all')
   const navigate = useNavigate()
-  const { isDark, toggleTheme } = useTheme()
-  const { lang, setLang, t } = useI18n()
+  const { lang, t } = useI18n()
+  const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
 
   useEffect(() => {
-    reportsApi.list()
+    setLoading(true)
+    reportsApi.list(activeWorkspaceId, activeProjectId)
       .then(setReports)
       .catch(() => toast.error('Failed to load reports'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeWorkspaceId, activeProjectId])
 
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
@@ -107,90 +110,46 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#111113] text-[#1d1d1f] dark:text-white">
-      <header className="sticky top-0 z-50 h-11 bg-[#F5F5F7]/95 dark:bg-[#111113]/95 backdrop-blur-xl border-b border-black/[0.07] dark:border-white/[0.07] flex items-center px-5 gap-2">
-        <button
-          onClick={() => navigate('/workflows')}
-          className="flex items-center gap-1.5 text-[13px] text-[#1d1d1f]/50 dark:text-white/50 hover:text-[#1d1d1f]/90 dark:hover:text-white/90 transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M9 11L5 7l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {t('backToWorkflowsList')}
-        </button>
-        <span className="text-[#1d1d1f]/15 dark:text-white/15 text-[12px]">·</span>
-        <span className="text-[13px] font-medium text-[#1d1d1f]/80 dark:text-white/80">{t('reports')}</span>
-        <div className="flex-1" />
-        {/* Language toggle */}
-        <div className="flex rounded-lg overflow-hidden border border-black/[0.08] dark:border-white/[0.08] mr-1">
-          {(['en', 'tr'] as const).map((l) => (
-            <button
-              key={l}
-              onClick={() => setLang(l)}
-              className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                lang === l
-                  ? 'bg-[#0071E3] text-white'
-                  : 'text-[#1d1d1f]/50 dark:text-white/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05]'
-              }`}
-            >
-              {l === 'en' ? '🇬🇧' : '🇹🇷'}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={toggleTheme}
-          title={isDark ? t('switchToLight') : t('switchToDark')}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-[#1d1d1f]/40 dark:text-white/40 hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.07] transition-all"
-        >
-          {isDark ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="4" />
-              <path strokeLinecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-            </svg>
-          )}
-        </button>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white mb-1">{t('reports')}</h1>
-        <p className="text-[13px] text-[#1d1d1f]/35 dark:text-white/35 mb-5">{t('reportsSubtitle')}</p>
+      <main className="max-w-5xl mx-auto px-6 pt-6 pb-20">
+        <h1 className="text-xl font-bold leading-7 text-[var(--color-text-primary)] mb-1">{t('reports')}</h1>
+        <p className="text-[13px] text-[var(--color-text-secondary)] mb-6">
+          {t('reportsSubtitle')}
+          {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
+          {activeProject ? ` / ${activeProject.name}` : ''}
+        </p>
 
         {/* Filter bar */}
         {!loading && reports.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-white dark:bg-white/[0.03] border border-black/[0.07] dark:border-white/[0.07] rounded-2xl shadow-sm dark:shadow-none">
+          <div data-tour="report-visibility" className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-surface border border-[var(--color-border-default)] rounded-2xl shadow-sm">
             {/* Search */}
-            <div className="flex items-center gap-2 flex-1 min-w-[140px] bg-black/[0.04] dark:bg-white/[0.05] rounded-xl px-3 h-8">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-[#1d1d1f]/30 dark:text-white/30 flex-shrink-0">
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <div className="flex items-center gap-1.5 flex-1 min-w-[140px] bg-black/[0.04] dark:bg-white/[0.05] rounded-xl px-3 h-8">
+              <svg className="w-3.5 h-3.5 text-[var(--color-text-muted)] flex-shrink-0" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
               </svg>
               <input
                 type="text"
                 placeholder={lang === 'tr' ? 'Rapor ara...' : 'Search reports...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-[12px] text-[#1d1d1f] dark:text-white placeholder-[#1d1d1f]/30 dark:placeholder-white/30 outline-none"
+                className="flex-1 bg-transparent text-[12px] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] outline-none"
               />
               {search && (
-                <button onClick={() => setSearch('')} className="text-[#1d1d1f]/30 dark:text-white/30 hover:text-[#1d1d1f]/60 dark:hover:text-white/60">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                <button onClick={() => setSearch('')} aria-label="Clear search" className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
                 </button>
               )}
             </div>
             {/* Format filter */}
-            <div className="flex rounded-xl overflow-hidden border border-black/[0.07] dark:border-white/[0.07]">
+            <div className="flex rounded-xl overflow-hidden border border-[var(--color-border-default)]">
               {(['all', 'json', 'pdf'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFormatFilter(f)}
                   className={`px-2.5 h-8 text-[11px] font-medium transition-colors ${
                     formatFilter === f
-                      ? 'bg-[#0071E3] text-white'
-                      : 'text-[#1d1d1f]/50 dark:text-white/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05]'
+                      ? 'bg-primary text-white'
+                      : 'text-[var(--color-text-secondary)] hover:bg-black/[0.05] dark:hover:bg-white/[0.05]'
                   }`}
                 >
                   {f === 'all' ? (lang === 'tr' ? 'Tümü' : 'All') : f.toUpperCase()}
@@ -203,22 +162,22 @@ export default function ReportsPage() {
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               title={lang === 'tr' ? 'Başlangıç tarihi' : 'From date'}
-              className="h-8 px-2.5 text-[11px] bg-black/[0.04] dark:bg-white/[0.05] text-[#1d1d1f] dark:text-white border border-black/[0.07] dark:border-white/[0.07] rounded-xl outline-none focus:border-[#0071E3]/50 transition-colors"
+              className="h-8 px-2.5 text-[11px] bg-black/[0.04] dark:bg-white/[0.05] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded-xl outline-none focus:border-primary/50 transition-colors"
             />
-            <span className="text-[#1d1d1f]/20 dark:text-white/20 text-[11px]">—</span>
+            <span className="text-[var(--color-text-muted)] text-[11px]">—</span>
             {/* Date to */}
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               title={lang === 'tr' ? 'Bitiş tarihi' : 'To date'}
-              className="h-8 px-2.5 text-[11px] bg-black/[0.04] dark:bg-white/[0.05] text-[#1d1d1f] dark:text-white border border-black/[0.07] dark:border-white/[0.07] rounded-xl outline-none focus:border-[#0071E3]/50 transition-colors"
+              className="h-8 px-2.5 text-[11px] bg-black/[0.04] dark:bg-white/[0.05] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded-xl outline-none focus:border-primary/50 transition-colors"
             />
             {/* Clear filters */}
             {(search || formatFilter !== 'all' || dateFrom || dateTo) && (
               <button
                 onClick={() => { setSearch(''); setFormatFilter('all'); setDateFrom(''); setDateTo('') }}
-                className="h-8 px-2.5 text-[11px] text-[#1d1d1f]/40 dark:text-white/40 hover:text-[#FF453A] transition-colors rounded-xl hover:bg-[#FF453A]/10"
+                className="h-8 px-2.5 text-[11px] text-[var(--color-text-secondary)] hover:text-danger transition-colors rounded-xl hover:bg-danger/10"
               >
                 {lang === 'tr' ? 'Temizle' : 'Clear'}
               </button>
@@ -227,57 +186,64 @@ export default function ReportsPage() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="w-5 h-5 rounded-full border-2 border-black/[0.08] dark:border-white/[0.08] border-t-black/50 dark:border-t-white/50 animate-spin" />
-          </div>
+          <LoadingState message={lang === 'tr' ? 'Raporlar yükleniyor...' : 'Loading reports...'} />
         ) : reports.length === 0 ? (
-          <div className="text-center py-24">
-            <div className="w-14 h-14 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] border border-black/[0.07] dark:border-white/[0.07] flex items-center justify-center text-2xl mx-auto mb-4">📊</div>
-            <p className="text-[15px] font-medium text-[#1d1d1f]/40 dark:text-white/40 mb-1">{t('noReportsYet')}</p>
-            <p className="text-[13px] text-[#1d1d1f]/20 dark:text-white/20">{t('noReportsDesc')}</p>
-          </div>
+          <EmptyState
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+              </svg>
+            }
+            title={t('noReportsYet')}
+            description={t('noReportsDesc')}
+          />
         ) : filteredReports.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-[14px] text-[#1d1d1f]/30 dark:text-white/30">{lang === 'tr' ? 'Sonuç bulunamadı.' : 'No results match your filters.'}</p>
+            <p className="text-[13px] text-[var(--color-text-muted)]">{lang === 'tr' ? 'Sonuç bulunamadı.' : 'No results match your filters.'}</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div data-tour="reports-list" className="space-y-3">
             {filteredReports.map((r) => (
               <div key={r.id} className="relative">
                 <div
+                  data-tour="report-export"
                   onClick={() => navigate(`/reports/${r.id}`)}
                   onMouseEnter={() => handleMouseEnter(r.id)}
                   onMouseLeave={handleMouseLeave}
-                  className="bg-white dark:bg-white/[0.03] border border-black/[0.07] dark:border-white/[0.07] rounded-2xl px-5 py-4 flex items-center justify-between hover:bg-[#EBEBF0] dark:hover:bg-white/[0.05] transition-colors shadow-sm dark:shadow-none cursor-pointer group"
+                  className="rounded-lg border border-[var(--color-border-default)] bg-surface shadow-sm px-5 py-4 flex items-center justify-between hover:bg-black/[0.02] dark:hover:bg-white/[0.04] transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] border border-black/[0.07] dark:border-white/[0.07] flex items-center justify-center text-base">📊</div>
+                    <div className="w-9 h-9 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] border border-[var(--color-border-default)] flex items-center justify-center">
+                      <svg className="w-4 h-4 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                      </svg>
+                    </div>
                     <div>
-                      <h3 className="text-[14px] font-medium text-[#1d1d1f] dark:text-white">{r.title}</h3>
-                      <div className="text-[11px] text-[#1d1d1f]/30 dark:text-white/30 mt-0.5 flex gap-3">
+                      <h3 className="text-[13px] font-semibold leading-[18px] text-[var(--color-text-primary)]">{r.title}</h3>
+                      <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5 flex gap-3">
                         <span>{r.format.toUpperCase()}</span>
                         <span>{new Date(r.created_at).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US')}</span>
                       </div>
                     </div>
                   </div>
                   <svg
-                    width="16" height="16" viewBox="0 0 16 16" fill="none"
-                    className="text-[#1d1d1f]/25 dark:text-white/25 group-hover:text-[#1d1d1f]/60 dark:group-hover:text-white/60 transition-colors flex-shrink-0"
+                    className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors flex-shrink-0"
+                    viewBox="0 0 16 16" fill="none"
                   >
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
 
                 {/* Hover tooltip */}
                 {hoveredId === r.id && (
                   <div
-                    className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl shadow-xl dark:shadow-black/40 p-4 pointer-events-none"
+                    className="dropdown-popover absolute left-0 right-0 top-full mt-1.5 z-30 bg-surface border border-[var(--color-border-default)] rounded-2xl shadow-xl p-4 pointer-events-none"
                     onMouseEnter={() => setHoveredId(r.id)}
                     onMouseLeave={handleMouseLeave}
                   >
                     {loadingSummary === r.id ? (
                       <div className="flex items-center justify-center py-3">
-                        <div className="w-4 h-4 rounded-full border-2 border-black/[0.08] dark:border-white/[0.08] border-t-[#0071E3] animate-spin" />
+                        <div className="w-4 h-4 rounded-full border-2 border-[var(--color-border-default)] border-t-primary animate-spin" />
                       </div>
                     ) : summaries[r.id] ? (
                       <ReportTooltipContent summary={summaries[r.id]} lang={lang} />
@@ -289,7 +255,6 @@ export default function ReportsPage() {
           </div>
         )}
       </main>
-    </div>
   )
 }
 
@@ -300,12 +265,12 @@ function ReportTooltipContent({ summary, lang }: { summary: ReportSummary; lang:
       {/* Dataset size */}
       {summary.row_count != null && (
         <div className="flex items-center gap-4 text-[12px]">
-          <span className="text-[#1d1d1f]/40 dark:text-white/40">{tr ? 'Veri Seti' : 'Dataset'}</span>
-          <span className="font-semibold text-[#1d1d1f] dark:text-white font-mono">
+          <span className="text-[var(--color-text-secondary)]">{tr ? 'Veri Seti' : 'Dataset'}</span>
+          <span className="font-semibold text-[var(--color-text-primary)] font-mono">
             {summary.row_count.toLocaleString()} × {summary.column_count ?? '?'}
           </span>
           {summary.filename && (
-            <span className="text-[11px] text-[#1d1d1f]/30 dark:text-white/30 truncate max-w-[140px]">{summary.filename}</span>
+            <span className="text-[11px] text-[var(--color-text-muted)] truncate max-w-[140px]">{summary.filename}</span>
           )}
         </div>
       )}
@@ -314,10 +279,10 @@ function ReportTooltipContent({ summary, lang }: { summary: ReportSummary; lang:
         {/* Anomalies */}
         {summary.anomaly_count != null && (
           <div className="bg-black/[0.02] dark:bg-white/[0.03] rounded-xl px-3 py-2">
-            <p className="text-[10px] text-[#1d1d1f]/35 dark:text-white/35 uppercase tracking-wider mb-0.5">
+            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-0.5">
               {tr ? 'Anomali' : 'Anomalies'}
             </p>
-            <p className={`text-[14px] font-bold font-mono ${summary.anomaly_count > 0 ? 'text-[#FF453A]' : 'text-[#30D158]'}`}>
+            <p className={`text-[14px] font-bold font-mono ${summary.anomaly_count > 0 ? 'text-danger' : 'text-success'}`}>
               {summary.anomaly_count.toLocaleString()}
               {summary.anomaly_rate != null && (
                 <span className="text-[10px] font-normal ml-1 opacity-60">
@@ -331,10 +296,10 @@ function ReportTooltipContent({ summary, lang }: { summary: ReportSummary; lang:
         {/* Missing columns */}
         {summary.missing_columns != null && (
           <div className="bg-black/[0.02] dark:bg-white/[0.03] rounded-xl px-3 py-2">
-            <p className="text-[10px] text-[#1d1d1f]/35 dark:text-white/35 uppercase tracking-wider mb-0.5">
+            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-0.5">
               {tr ? 'Eksik Sütun' : 'Missing cols'}
             </p>
-            <p className={`text-[14px] font-bold font-mono ${summary.missing_columns > 0 ? 'text-[#FF9F0A]' : 'text-[#30D158]'}`}>
+            <p className={`text-[14px] font-bold font-mono ${summary.missing_columns > 0 ? 'text-warning' : 'text-success'}`}>
               {summary.missing_columns}
             </p>
           </div>
@@ -343,10 +308,10 @@ function ReportTooltipContent({ summary, lang }: { summary: ReportSummary; lang:
         {/* Duplicates */}
         {summary.duplicate_count != null && (
           <div className="bg-black/[0.02] dark:bg-white/[0.03] rounded-xl px-3 py-2">
-            <p className="text-[10px] text-[#1d1d1f]/35 dark:text-white/35 uppercase tracking-wider mb-0.5">
+            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-0.5">
               {tr ? 'Tekrar' : 'Duplicates'}
             </p>
-            <p className={`text-[14px] font-bold font-mono ${summary.duplicate_count > 0 ? 'text-[#FF9F0A]' : 'text-[#30D158]'}`}>
+            <p className={`text-[14px] font-bold font-mono ${summary.duplicate_count > 0 ? 'text-warning' : 'text-success'}`}>
               {summary.duplicate_count.toLocaleString()}
             </p>
           </div>
@@ -356,14 +321,14 @@ function ReportTooltipContent({ summary, lang }: { summary: ReportSummary; lang:
       {/* Top correlations */}
       {(summary.strong_correlations ?? []).length > 0 && (
         <div>
-          <p className="text-[10px] text-[#1d1d1f]/35 dark:text-white/35 uppercase tracking-wider mb-1.5">
+          <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">
             {tr ? 'Güçlü Korelasyonlar' : 'Strong Correlations'}
           </p>
           <div className="space-y-1">
             {summary.strong_correlations!.map((p, i) => (
               <div key={i} className="flex items-center justify-between text-[11px]">
-                <span className="text-[#1d1d1f]/60 dark:text-white/60 truncate">{p.col_a} ↔ {p.col_b}</span>
-                <span className={`font-mono font-semibold ml-2 flex-shrink-0 ${Math.abs(p.correlation) > 0.8 ? 'text-[#FF453A]' : 'text-[#FF9F0A]'}`}>
+                <span className="text-[var(--color-text-secondary)] truncate">{p.col_a} ↔ {p.col_b}</span>
+                <span className={`font-mono font-semibold ml-2 flex-shrink-0 ${Math.abs(p.correlation) > 0.8 ? 'text-danger' : 'text-warning'}`}>
                   {p.correlation.toFixed(3)}
                 </span>
               </div>
