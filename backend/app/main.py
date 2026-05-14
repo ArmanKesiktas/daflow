@@ -56,3 +56,9 @@ if os.path.isdir(static_path):
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+
+
+@app.get("/api/ping")
+async def ping():
+    """Keep-alive endpoint — hit every 14 minutes to prevent Render free tier spin-down."""
+    return {"pong": True}
