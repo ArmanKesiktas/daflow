@@ -19,3 +19,5 @@ backend/static_files/
 .DS_Store
 *.log
 .vite/
+.vercel
+.env*.local

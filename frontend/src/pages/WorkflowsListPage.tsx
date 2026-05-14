@@ -30,7 +30,7 @@ export default function WorkflowsListPage() {
     setLoading(true)
     setError(null)
     workflowsApi.list(activeWorkspaceId, activeProjectId)
-      .then(setWorkflows)
+      .then((data) => setWorkflows(Array.isArray(data) ? data : []))
       .catch(() => {
         const msg = lang === 'tr' ? 'Workflow yüklenemedi' : 'Failed to load workflows'
         setError(msg)
