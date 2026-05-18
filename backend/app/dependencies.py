@@ -87,10 +87,30 @@ async def get_current_user(
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token payload")
         return {"id": user_id, "email": payload.get("email", "")}
-    except JWTError as exc:
+    except JWTError:
+        # JWT decode failed — fallback to Supabase API verification if available
+        if settings.SUPABASE_URL:
+            apikey = settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY
+            if apikey:
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        response = await client.get(
+                            f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/user",
+                            headers={
+                                "apikey": apikey,
+                                "Authorization": f"Bearer {token}",
+                            },
+                        )
+                    if response.status_code < 400:
+                        data = response.json()
+                        uid = data.get("id")
+                        if uid:
+                            return {"id": uid, "email": data.get("email", "")}
+                except Exception:
+                    pass
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Could not validate token: {exc}",
+            detail="Could not validate token",
         )
 
 
