@@ -51,7 +51,7 @@ async def get_current_user(
         )
     token = credentials.credentials
 
-    if settings.SUPABASE_URL and settings.JWT_SECRET in {"", "your-supabase-jwt-secret", "dev-secret-not-for-production"}:
+    if settings.SUPABASE_URL and settings.JWT_SECRET in {"", "your-supabase-jwt-secret", "dev-secret-not-for-production", "empty"}:
         apikey = settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY
         if not apikey:
             raise HTTPException(status_code=401, detail="Supabase auth key is not configured")
