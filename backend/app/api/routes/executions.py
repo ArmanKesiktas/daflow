@@ -4,6 +4,7 @@ and retrieve per-node results.
 """
 import asyncio
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -18,6 +19,10 @@ from app.services.workspace_service import log_activity
 from app.services.workspace_service import require_workspace_member
 
 router = APIRouter()
+
+
+class _ExecutionCancelled(Exception):
+    """Raised internally when a running execution is cancelled by the user."""
 
 
 # ── Trigger execution ─────────────────────────────────────────────────────────
@@ -56,41 +61,110 @@ async def run_workflow(
 
     workflow_data = wf_result.data
 
-    # Create execution record
-    exec_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    exec_payload = {
-        "id": exec_id,
-        "workflow_id": workflow_id,
-        "user_id": user["id"],
-        "status": "pending",
-        "created_at": now,
-    }
-    if workflow_data.get("workspace_id"):
-        exec_payload["workspace_id"] = workflow_data.get("workspace_id")
-        exec_payload["project_id"] = workflow_data.get("project_id")
-    supabase.table("workflow_executions").insert(exec_payload).execute()
+    exec_id = _create_execution_record(supabase, workflow_data, user["id"])
+    automation_id = _start_continuous_schedule(supabase, workflow_data, user["id"], exec_id)
     log_activity(supabase, workflow_data.get("workspace_id"), user["id"], "workflow.executed", "workflow", workflow_id, {"execution_id": exec_id})
 
-    # Seed node results as "pending"
-    for node in workflow_data["graph_data"].get("nodes", []):
-        supabase.table("node_execution_results").insert({
-            "execution_id": exec_id,
-            "node_id": node["id"],
-            "node_type": node.get("type", "unknown"),
-            "status": "pending",
-        }).execute()
-
-    # Launch background task
     background_tasks.add_task(
-        _execute_workflow_task,
+        _continuous_workflow_loop,
+        automation_id,
         exec_id,
         workflow_id,
         workflow_data["graph_data"],
         workflow_data.get("name", "Untitled"),
     )
 
-    return {"execution_id": exec_id, "status": "accepted"}
+    return {"execution_id": exec_id, "status": "accepted", "continuous": True, "automation_id": automation_id}
+
+
+@router.post("/workflows/{workflow_id}/stop")
+async def stop_workflow_automation(
+    workflow_id: str,
+    payload: dict = {},
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    """Stop a continuous workflow automation and cancel its current run."""
+    from app.api.routes.workflows import _has_workflow_permission
+
+    allowed, _ = _has_workflow_permission(supabase, user, workflow_id, "edit")
+    if not allowed:
+        raise HTTPException(403, "You do not have permission to stop this workflow")
+
+    now = datetime.now(timezone.utc).isoformat()
+    latest_execution_id = str(payload.get("execution_id") or "")
+    try:
+        schedules = (
+            supabase.table("workflow_schedules")
+            .select("*")
+            .eq("workflow_id", workflow_id)
+            .eq("user_id", user["id"])
+            .eq("frequency", "continuous")
+            .eq("is_active", True)
+            .execute()
+            .data or []
+        )
+        for schedule in schedules:
+            latest_execution_id = latest_execution_id or str(schedule.get("last_execution_id") or "")
+            supabase.table("workflow_schedules").update({
+                "is_active": False,
+                "updated_at": now,
+            }).eq("id", schedule["id"]).execute()
+    except Exception:
+        pass
+
+    if latest_execution_id:
+        _cancel_execution(supabase, latest_execution_id, user["id"])
+
+    return {"workflow_id": workflow_id, "status": "stopped", "execution_id": latest_execution_id or None}
+
+
+@router.get("/workflows/{workflow_id}/automation-status")
+async def get_workflow_automation_status(
+    workflow_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    """Return whether the current user has a continuous automation active."""
+    from app.api.routes.workflows import _has_workflow_permission
+
+    allowed, _ = _has_workflow_permission(supabase, user, workflow_id, "view")
+    if not allowed:
+        raise HTTPException(403, "You do not have permission to view this workflow")
+    try:
+        rows = (
+            supabase.table("workflow_schedules")
+            .select("*")
+            .eq("workflow_id", workflow_id)
+            .eq("user_id", user["id"])
+            .eq("frequency", "continuous")
+            .eq("is_active", True)
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+    except Exception:
+        rows = []
+    row = rows[0] if rows else {}
+    return {
+        "workflow_id": workflow_id,
+        "active": bool(row),
+        "automation_id": row.get("id"),
+        "current_execution_id": row.get("last_execution_id"),
+        "last_run_at": row.get("last_run_at"),
+        "next_run_at": row.get("next_run_at"),
+    }
+
+
+@router.post("/{execution_id}/cancel")
+async def cancel_execution(
+    execution_id: str,
+    user: dict = Depends(get_current_user),
+    supabase=Depends(get_supabase),
+):
+    _cancel_execution(supabase, execution_id, user["id"])
+    return {"execution_id": execution_id, "status": "cancelled"}
 
 
 # ── SSE stream ────────────────────────────────────────────────────────────────
@@ -107,7 +181,7 @@ async def stream_execution(
 
     async def event_generator():
         prev_statuses: Dict[str, str] = {}
-        terminal_states = {"success", "error"}
+        terminal_states = {"success", "error", "cancelled"}
 
         for _ in range(300):  # max 5 minutes (1s polling)
             exec_row = (
@@ -364,6 +438,194 @@ def _build_dashboard_ai_context(exec_row: Dict[str, Any], node_rows: list, langu
     }
 
 
+# ── Continuous automation helpers ─────────────────────────────────────────────
+
+def _create_execution_record(supabase, workflow_data: dict, user_id: str) -> str:
+    exec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    exec_payload = {
+        "id": exec_id,
+        "workflow_id": workflow_data["id"],
+        "user_id": user_id,
+        "status": "pending",
+        "created_at": now,
+    }
+    if workflow_data.get("workspace_id"):
+        exec_payload["workspace_id"] = workflow_data.get("workspace_id")
+        exec_payload["project_id"] = workflow_data.get("project_id")
+    supabase.table("workflow_executions").insert(exec_payload).execute()
+    _seed_node_results(supabase, exec_id, workflow_data.get("graph_data") or {})
+    return exec_id
+
+
+def _seed_node_results(supabase, exec_id: str, graph_data: dict) -> None:
+    for node in graph_data.get("nodes", []):
+        supabase.table("node_execution_results").insert({
+            "execution_id": exec_id,
+            "node_id": node["id"],
+            "node_type": node.get("type", "unknown"),
+            "status": "pending",
+        }).execute()
+
+
+def _start_continuous_schedule(supabase, workflow_data: dict, user_id: str, exec_id: str) -> str:
+    now = datetime.now(timezone.utc).isoformat()
+    schedule_id = str(uuid.uuid4())
+    try:
+        supabase.table("workflow_schedules").update({
+            "is_active": False,
+            "updated_at": now,
+        }).eq("workflow_id", workflow_data["id"]).eq("user_id", user_id).eq("frequency", "continuous").execute()
+        supabase.table("workflow_schedules").insert({
+            "id": schedule_id,
+            "workflow_id": workflow_data["id"],
+            "user_id": user_id,
+            "frequency": "continuous",
+            "time_of_day": None,
+            "timezone": "UTC",
+            "is_active": True,
+            "last_execution_id": exec_id,
+            "next_run_at": now,
+            "created_at": now,
+            "updated_at": now,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, "Continuous automation storage is not ready. Apply migration 010_platform_productivity.sql.") from exc
+    return schedule_id
+
+
+def _continuous_schedule_active(supabase, schedule_id: str) -> dict | None:
+    try:
+        row = (
+            supabase.table("workflow_schedules")
+            .select("*")
+            .eq("id", schedule_id)
+            .single()
+            .execute()
+            .data
+        )
+    except Exception:
+        row = None
+    if not row or not row.get("is_active"):
+        return None
+    return row
+
+
+def _latest_workflow_for_automation(supabase, workflow_id: str) -> dict | None:
+    try:
+        return (
+            supabase.table("workflows")
+            .select("id, graph_data, name, user_id, workspace_id, project_id")
+            .eq("id", workflow_id)
+            .single()
+            .execute()
+            .data
+        )
+    except Exception:
+        row = (
+            supabase.table("workflows")
+            .select("id, graph_data, name, user_id")
+            .eq("id", workflow_id)
+            .single()
+            .execute()
+            .data
+        )
+        return row
+
+
+def _continuous_workflow_loop(
+    schedule_id: str,
+    first_exec_id: str,
+    workflow_id: str,
+    graph_data: Dict[str, Any],
+    workflow_name: str,
+):
+    """Run the workflow repeatedly until its continuous schedule is stopped."""
+    from app.dependencies import get_supabase
+
+    supabase = get_supabase()
+    exec_id = first_exec_id
+    current_graph = graph_data
+    current_name = workflow_name
+
+    while True:
+        _execute_workflow_task(exec_id, workflow_id, current_graph, current_name)
+        schedule = _continuous_schedule_active(supabase, schedule_id)
+        if not schedule:
+            break
+
+        now = datetime.now(timezone.utc).isoformat()
+        supabase.table("workflow_schedules").update({
+            "last_run_at": now,
+            "next_run_at": now,
+            "updated_at": now,
+        }).eq("id", schedule_id).execute()
+
+        time.sleep(5)
+        schedule = _continuous_schedule_active(supabase, schedule_id)
+        if not schedule:
+            break
+
+        workflow = _latest_workflow_for_automation(supabase, workflow_id)
+        if not workflow:
+            supabase.table("workflow_schedules").update({
+                "is_active": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", schedule_id).execute()
+            break
+
+        current_graph = workflow.get("graph_data") or {}
+        current_name = workflow.get("name") or "Untitled"
+        exec_id = _create_execution_record(supabase, workflow, schedule["user_id"])
+        supabase.table("workflow_schedules").update({
+            "last_execution_id": exec_id,
+            "next_run_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", schedule_id).execute()
+
+
+def _execution_is_cancelled(supabase, exec_id: str) -> bool:
+    try:
+        row = (
+            supabase.table("workflow_executions")
+            .select("status")
+            .eq("id", exec_id)
+            .single()
+            .execute()
+            .data or {}
+        )
+        return row.get("status") == "cancelled"
+    except Exception:
+        return False
+
+
+def _cancel_execution(supabase, exec_id: str, user_id: str) -> None:
+    row = (
+        supabase.table("workflow_executions")
+        .select("id, user_id, status")
+        .eq("id", exec_id)
+        .single()
+        .execute()
+        .data
+    )
+    if not row:
+        raise HTTPException(404, "Execution not found")
+    if row.get("user_id") != user_id:
+        raise HTTPException(403, "You do not have permission to cancel this execution")
+    if row.get("status") in {"success", "error", "cancelled"}:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("workflow_executions").update({
+        "status": "cancelled",
+        "completed_at": now,
+        "error_message": None,
+    }).eq("id", exec_id).execute()
+    supabase.table("node_execution_results").update({
+        "status": "cancelled",
+        "executed_at": now,
+    }).eq("execution_id", exec_id).in_("status", ["pending", "running"]).execute()
+
+
 # ── Background task ───────────────────────────────────────────────────────────
 
 def _execute_workflow_task(
@@ -376,6 +638,9 @@ def _execute_workflow_task(
     from app.dependencies import get_supabase
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
+
+    if _execution_is_cancelled(supabase, exec_id):
+        return
 
     # Mark as running
     supabase.table("workflow_executions").update({
@@ -392,6 +657,8 @@ def _execute_workflow_task(
 
     def on_node_status(node_id: str, status: str, metrics: Dict):
         """Called after each node completes."""
+        if _execution_is_cancelled(supabase, exec_id):
+            raise _ExecutionCancelled()
         _update_node_status(supabase, exec_id, node_id, status, metrics)
 
     try:
@@ -404,6 +671,9 @@ def _execute_workflow_task(
 
         engine = WorkflowExecutionEngine(graph_data, exec_id, on_node_status)
         summary = engine.execute()
+
+        if _execution_is_cancelled(supabase, exec_id):
+            raise _ExecutionCancelled()
 
         # Persist serializable outputs and error messages
         for node_id, node_summary in summary.items():
@@ -425,7 +695,20 @@ def _execute_workflow_task(
         # Auto-save report if workflow contains a report node
         _auto_save_report(supabase, exec_id, workflow_id, workflow_name, graph_data, engine)
 
+    except _ExecutionCancelled:
+        supabase.table("workflow_executions").update({
+            "status": "cancelled",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "error_message": None,
+        }).eq("id", exec_id).execute()
     except Exception as exc:
+        if _execution_is_cancelled(supabase, exec_id):
+            supabase.table("workflow_executions").update({
+                "status": "cancelled",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": None,
+            }).eq("id", exec_id).execute()
+            return
         supabase.table("workflow_executions").update({
             "status": "error",
             "completed_at": datetime.now(timezone.utc).isoformat(),

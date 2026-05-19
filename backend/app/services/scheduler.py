@@ -51,6 +51,8 @@ def run_due_schedules_once() -> None:
     )
     now = datetime.now(timezone.utc)
     for schedule in rows:
+        if schedule.get("frequency") == "continuous":
+            continue
         due = _parse_dt(schedule.get("next_run_at"))
         if due and due > now:
             continue
