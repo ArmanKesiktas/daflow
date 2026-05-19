@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { filesApi } from '../api/executions'
 import { connectorsApi, datasetOrgApi } from '../api/platform'
@@ -36,14 +36,18 @@ export default function DatasetsPage() {
   })
   const [connectorTest, setConnectorTest] = useState<Record<string, string>>({})
   const navigate = useNavigate()
+  const { workspaceId: routeWorkspaceId, projectId: routeProjectId } = useParams()
   const { lang } = useI18n()
-  const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
+  const { activeWorkspaceId, activeWorkspace, activeProject } = useWorkspace()
+  const effectiveWorkspaceId = routeWorkspaceId || activeWorkspaceId
+  const effectiveProjectId = routeProjectId || null
+  const visibleProject = routeProjectId ? activeProject : null
   const tr = lang === 'tr'
 
   const load = () => {
     setLoading(true)
     setError(null)
-    filesApi.list(activeWorkspaceId, activeProjectId)
+    filesApi.list(effectiveWorkspaceId, effectiveProjectId)
       .then(setDatasets)
       .catch(() => {
         setError(tr ? 'Veriler yüklenemedi' : 'Datasets could not be loaded')
@@ -55,7 +59,7 @@ export default function DatasetsPage() {
     connectorsApi.list().then(setConnectors).catch(() => setConnectors([]))
   }
 
-  useEffect(load, [tr, activeWorkspaceId, activeProjectId])
+  useEffect(load, [tr, effectiveWorkspaceId, effectiveProjectId])
 
   const filtered = useMemo(() => {
     return datasets.filter((item) => {
@@ -187,7 +191,7 @@ export default function DatasetsPage() {
 
   const syncConnector = async (connector: DataConnector) => {
     try {
-      const result = await connectorsApi.sync(connector.id, { workspace_id: activeWorkspaceId, project_id: activeProjectId })
+      const result = await connectorsApi.sync(connector.id, { workspace_id: effectiveWorkspaceId, project_id: effectiveProjectId })
       toast.success(`${tr ? 'Senkronize edildi' : 'Synced'}: ${result.row_count} rows`)
       load()
     } catch {
@@ -218,7 +222,7 @@ export default function DatasetsPage() {
           <p className="text-[13px] text-[var(--color-text-secondary)] mt-1">
             {tr ? 'Yüklediğiniz tabloları yönetin ve doğrudan workflow oluşturun.' : 'Manage uploaded tables and create workflows from them.'}
             {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
-            {activeProject ? ` / ${activeProject.name}` : ''}
+            {visibleProject ? ` / ${visibleProject.name}` : ''}
           </p>
         </div>
         <button onClick={() => navigate('/workflows')} className="h-8 px-4 rounded-lg bg-primary text-white text-[13px] font-medium transition-all hover:bg-primary-hover">

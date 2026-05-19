@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { reportsApi } from '../api/executions'
 import type { Report } from '../types/workflow'
 import toast from 'react-hot-toast'
@@ -59,16 +59,20 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState('')
   const [formatFilter, setFormatFilter] = useState<'all' | 'json' | 'pdf'>('all')
   const navigate = useNavigate()
+  const { workspaceId: routeWorkspaceId, projectId: routeProjectId } = useParams()
   const { lang, t } = useI18n()
-  const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
+  const { activeWorkspaceId, activeWorkspace, activeProject } = useWorkspace()
+  const effectiveWorkspaceId = routeWorkspaceId || activeWorkspaceId
+  const effectiveProjectId = routeProjectId || null
+  const visibleProject = routeProjectId ? activeProject : null
 
   useEffect(() => {
     setLoading(true)
-    reportsApi.list(activeWorkspaceId, activeProjectId)
+    reportsApi.list(effectiveWorkspaceId, effectiveProjectId)
       .then(setReports)
       .catch(() => toast.error('Failed to load reports'))
       .finally(() => setLoading(false))
-  }, [activeWorkspaceId, activeProjectId])
+  }, [effectiveWorkspaceId, effectiveProjectId])
 
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
@@ -115,7 +119,7 @@ export default function ReportsPage() {
         <p className="text-[13px] text-[var(--color-text-secondary)] mb-6">
           {t('reportsSubtitle')}
           {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
-          {activeProject ? ` / ${activeProject.name}` : ''}
+          {visibleProject ? ` / ${visibleProject.name}` : ''}
         </p>
 
         {/* Filter bar */}

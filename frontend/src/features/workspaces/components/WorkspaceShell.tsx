@@ -60,9 +60,7 @@ export default function WorkspaceShell({ children }: WorkspaceShellProps) {
       setActiveProjectId(projectId, workspaceId)
       return
     }
-    if (location.pathname === `/workspaces/${workspaceId}` || location.pathname === `/workspaces/${workspaceId}/projects`) {
-      setActiveProjectId(null, workspaceId)
-    }
+    setActiveProjectId(null, workspaceId)
   }, [location.pathname, projectId, setActiveProjectId, workspaceId])
 
   const selectedProject = useMemo(

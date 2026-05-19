@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { dashboardsApi } from '../api/executions'
 import toast from 'react-hot-toast'
 import { useI18n } from '../i18n'
@@ -25,13 +25,17 @@ export default function DashboardsListPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const navigate = useNavigate()
+  const { workspaceId: routeWorkspaceId, projectId: routeProjectId } = useParams()
   const { lang } = useI18n()
-  const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
+  const { activeWorkspaceId, activeWorkspace, activeProject } = useWorkspace()
+  const effectiveWorkspaceId = routeWorkspaceId || activeWorkspaceId
+  const effectiveProjectId = routeProjectId || null
+  const visibleProject = routeProjectId ? activeProject : null
 
   const fetchDashboards = () => {
     setLoading(true)
     setError(false)
-    dashboardsApi.list(activeWorkspaceId, activeProjectId)
+    dashboardsApi.list(effectiveWorkspaceId, effectiveProjectId)
       .then(setDashboards)
       .catch(() => {
         setError(true)
@@ -42,7 +46,7 @@ export default function DashboardsListPage() {
 
   useEffect(() => {
     fetchDashboards()
-  }, [activeWorkspaceId, activeProjectId])
+  }, [effectiveWorkspaceId, effectiveProjectId])
 
   const filteredDashboards = useMemo(() => {
     return dashboards.filter((d) => {
@@ -68,7 +72,7 @@ export default function DashboardsListPage() {
             ? 'Başarıyla çalıştırılan workflow\'lardan oluşturulan dashboardlar.'
             : 'Dashboards generated from successfully executed workflows.'}
           {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
-          {activeProject ? ` / ${activeProject.name}` : ''}
+          {visibleProject ? ` / ${visibleProject.name}` : ''}
         </p>
 
         {/* Filter bar */}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { workflowsApi } from '../api/workflows'
 import type { WorkflowListItem } from '../types/workflow'
 import toast from 'react-hot-toast'
@@ -24,8 +24,12 @@ export default function WorkflowsListPage() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  const { workspaceId: routeWorkspaceId, projectId: routeProjectId } = useParams()
   const { lang, t } = useI18n()
-  const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
+  const { activeWorkspaceId, activeWorkspace, activeProject } = useWorkspace()
+  const effectiveWorkspaceId = routeWorkspaceId || activeWorkspaceId
+  const effectiveProjectId = routeProjectId || null
+  const visibleProject = routeProjectId ? activeProject : null
   const fetchIdRef = useRef(0)
 
   const fetchWorkflows = () => {
@@ -33,7 +37,7 @@ export default function WorkflowsListPage() {
     fetchIdRef.current = fetchId
     setLoading(true)
     setError(null)
-    workflowsApi.list(activeWorkspaceId, activeProjectId)
+    workflowsApi.list(effectiveWorkspaceId, effectiveProjectId)
       .then((data) => {
         if (fetchIdRef.current !== fetchId) return
         setWorkflows(Array.isArray(data) ? data : [])
@@ -52,20 +56,18 @@ export default function WorkflowsListPage() {
   useEffect(() => {
     if (location.pathname === '/workflows' && activeWorkspaceId) {
       navigate(
-        activeProjectId
-          ? `/workspaces/${activeWorkspaceId}/projects/${activeProjectId}/workflows`
-          : `/workspaces/${activeWorkspaceId}/workflows`,
+        `/workspaces/${activeWorkspaceId}/workflows`,
         { replace: true },
       )
     }
-  }, [activeProjectId, activeWorkspaceId, location.pathname, navigate])
+  }, [activeWorkspaceId, location.pathname, navigate])
 
   useEffect(() => {
     fetchWorkflows()
     onboardingApi.get()
       .then((state) => setShowOnboarding(!state.skipped && (state.completed_steps?.length ?? 0) === 0))
       .catch(() => setShowOnboarding(!localStorage.getItem('daflow_onboarding_done')))
-  }, [activeWorkspaceId, activeProjectId])
+  }, [effectiveWorkspaceId, effectiveProjectId])
 
   const orderedWorkflows = useMemo(() => {
     const order = readWorkflowOrder()
@@ -95,7 +97,7 @@ export default function WorkflowsListPage() {
   const handleCreate = async () => {
     setCreating(true)
     try {
-      const wf = await workflowsApi.create({ name: t('newWorkflow'), workspace_id: activeWorkspaceId, project_id: activeProjectId })
+      const wf = await workflowsApi.create({ name: t('newWorkflow'), workspace_id: effectiveWorkspaceId, project_id: effectiveProjectId })
       navigate(`/workflows/${wf.id}/edit`)
     } catch {
       toast.error(lang === 'tr' ? 'Workflow oluşturulamadı' : 'Failed to create workflow')
@@ -152,7 +154,7 @@ export default function WorkflowsListPage() {
           <p className="text-[13px] leading-5 text-[var(--color-text-secondary)] mt-1">
             {t('workflowsSubtitle')}
             {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
-            {activeProject ? ` / ${activeProject.name}` : ''}
+            {visibleProject ? ` / ${visibleProject.name}` : ''}
           </p>
         </div>
         <div data-tour="workflow-create" className="flex items-center gap-2">
