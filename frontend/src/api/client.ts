@@ -1,7 +1,19 @@
 import axios from 'axios'
 
+function apiBaseUrl() {
+  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+  const base = configured || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? ''
+    : 'https://daflow.onrender.com')
+
+  if (!base) return '/api'
+
+  const normalized = base.replace(/\/+$/, '')
+  return normalized.endsWith('/api') ? normalized : `${normalized}/api`
+}
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
 })
 
