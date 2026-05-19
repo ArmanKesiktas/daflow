@@ -56,7 +56,7 @@ export default function WorkspaceProjectsPage() {
     if (!workspaceId || !name.trim()) return
     const trimmedName = name.trim()
     if (projects.some((project) => normalizeName(project.name) === normalizeName(trimmedName))) {
-      toast.error(tr ? 'Bu workspace içinde aynı isimde bir proje zaten var' : 'A project with this name already exists in this workspace')
+      toast.error(tr ? 'Aynı isimle proje oluşturamazsınız.' : 'You cannot create a project with the same name.')
       return
     }
     try {

@@ -484,13 +484,13 @@ def _has_matching_name(rows: list[dict], name: str, exclude_id: str | None = Non
 def _ensure_workspace_name_available(supabase, owner_id: str, name: str, exclude_id: str | None = None) -> None:
     rows = supabase.table("workspaces").select("id, name").eq("owner_id", owner_id).execute().data or []
     if _has_matching_name(rows, name, exclude_id):
-        raise HTTPException(409, "A workspace with this name already exists.")
+        raise HTTPException(409, "Aynı isimle workspace oluşturamazsınız.")
 
 
 def _ensure_project_name_available(supabase, workspace_id: str, name: str, exclude_id: str | None = None) -> None:
     rows = supabase.table("workspace_projects").select("id, name").eq("workspace_id", workspace_id).execute().data or []
     if _has_matching_name(rows, name, exclude_id):
-        raise HTTPException(409, "A project with this name already exists in this workspace.")
+        raise HTTPException(409, "Aynı isimle proje oluşturamazsınız.")
 
 
 def _slugify(value: str) -> str:

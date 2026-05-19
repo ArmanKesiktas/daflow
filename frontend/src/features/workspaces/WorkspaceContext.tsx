@@ -117,7 +117,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const trimmedName = name.trim()
     if (!trimmedName) return null
     if (workspaces.some((workspace) => normalizeName(workspace.name) === normalizeName(trimmedName))) {
-      toast.error('Bu isimde bir workspace zaten var')
+      toast.error('Aynı isimle workspace oluşturamazsınız.')
       return null
     }
     try {
