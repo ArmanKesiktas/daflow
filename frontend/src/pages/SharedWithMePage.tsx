@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { workflowsApi } from '../api/workflows'
 import type { WorkflowListItem } from '../types/workflow'
 import { useI18n } from '../i18n'
+import LoadingState from '../components/ui/LoadingState'
 
 type SharedWorkflow = WorkflowListItem & {
   share_id?: string
@@ -39,10 +40,7 @@ export default function SharedWithMePage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-[#1d1d1f]/30 dark:text-white/30 text-sm">
-            <span className="w-4 h-4 border-2 border-black/20 dark:border-white/20 border-t-black/60 dark:border-t-white/60 rounded-full animate-spin" />
-            {t('loading')}
-          </div>
+          <LoadingState variant="grid" rows={6} message={t('loading')} />
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 gap-5">
             <div className="w-16 h-16 rounded-2xl bg-black/[0.05] dark:bg-white/[0.06] flex items-center justify-center">

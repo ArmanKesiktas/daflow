@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { workflowsApi } from '../api/workflows'
 import type { WorkflowListItem } from '../types/workflow'
@@ -7,6 +7,7 @@ import { useI18n } from '../i18n'
 import WorkflowTemplateModal from '../components/WorkflowTemplateModal'
 import { onboardingApi } from '../api/platform'
 import { useWorkspace } from '../features/workspaces/WorkspaceContext'
+import LoadingState from '../components/ui/LoadingState'
 
 const WORKFLOW_ORDER_KEY = 'daflow_workflow_card_order'
 
@@ -25,18 +26,27 @@ export default function WorkflowsListPage() {
   const location = useLocation()
   const { lang, t } = useI18n()
   const { activeWorkspaceId, activeWorkspace, activeProjectId, activeProject } = useWorkspace()
+  const fetchIdRef = useRef(0)
 
   const fetchWorkflows = () => {
+    const fetchId = fetchIdRef.current + 1
+    fetchIdRef.current = fetchId
     setLoading(true)
     setError(null)
     workflowsApi.list(activeWorkspaceId, activeProjectId)
-      .then((data) => setWorkflows(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (fetchIdRef.current !== fetchId) return
+        setWorkflows(Array.isArray(data) ? data : [])
+      })
       .catch(() => {
+        if (fetchIdRef.current !== fetchId) return
         const msg = lang === 'tr' ? 'Workflow yüklenemedi' : 'Failed to load workflows'
         setError(msg)
         toast.error(msg)
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (fetchIdRef.current === fetchId) setLoading(false)
+      })
   }
 
   useEffect(() => {
@@ -225,10 +235,11 @@ export default function WorkflowsListPage() {
 
       {/* Loading State */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 gap-3">
-          <span className="w-5 h-5 border-2 border-[var(--color-border-default)] border-t-[var(--color-primary)] rounded-full animate-spin" />
-          <p className="text-[13px] text-[var(--color-text-muted)]">{t('loading')}</p>
-        </div>
+        <LoadingState
+          variant="grid"
+          rows={6}
+          message={lang === 'tr' ? 'Workflowlar yükleniyor...' : 'Loading workflows...'}
+        />
       ) : error ? (
         /* Error State */
         <div className="flex flex-col items-center justify-center py-32 gap-4">

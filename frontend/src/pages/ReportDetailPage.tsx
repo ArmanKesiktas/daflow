@@ -6,6 +6,7 @@ import type { ReportDetail, ReportSection } from '../types/workflow'
 import toast from 'react-hot-toast'
 import { useI18n } from '../i18n'
 import { PageHeader } from '../components/ui'
+import LoadingState from '../components/ui/LoadingState'
 
 // ── Simple inline Markdown renderer ──────────────────────────────────────────
 function MarkdownBlock({ content }: { content: string }) {
@@ -363,7 +364,9 @@ export default function ReportDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--color-bg-page)] flex items-center justify-center">
-        <div className="w-6 h-6 rounded-full border-2 border-[var(--color-border-default)] border-t-[var(--color-text-secondary)] animate-spin" />
+        <div className="w-full max-w-5xl px-6">
+          <LoadingState variant="list" rows={6} message={lang === 'tr' ? 'Rapor yükleniyor...' : 'Loading report...'} />
+        </div>
       </div>
     )
   }

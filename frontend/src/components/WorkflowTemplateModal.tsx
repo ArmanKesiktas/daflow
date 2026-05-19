@@ -7,6 +7,7 @@ import type { WorkflowTemplate } from '../types/workflow'
 import { useI18n } from '../i18n'
 import { Background, BackgroundVariant, ReactFlow, type Edge, type Node } from '@xyflow/react'
 import { nodeTypes } from './nodes/nodeTypes'
+import LoadingState from './ui/LoadingState'
 
 interface Props {
   onClose: () => void
@@ -14,6 +15,8 @@ interface Props {
 
 export default function WorkflowTemplateModal({ onClose }: Props) {
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState('')
   const [creating, setCreating] = useState(false)
   const [category, setCategory] = useState('All')
@@ -21,14 +24,27 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
   const navigate = useNavigate()
   const { lang } = useI18n()
   const tr = lang === 'tr'
+  const { activeWorkspaceId, activeProjectId } = useWorkspace()
 
-  useEffect(() => {
+  const loadTemplates = () => {
+    setLoading(true)
+    setLoadError(null)
     templatesApi.list()
       .then((items) => {
-        setTemplates(items)
-        setSelectedId(items[0]?.id ?? '')
+        const safeItems = Array.isArray(items) ? items : []
+        setTemplates(safeItems)
+        setSelectedId(safeItems[0]?.id ?? '')
       })
-      .catch(() => toast.error(tr ? 'Template listesi yüklenemedi' : 'Templates could not be loaded'))
+      .catch(() => {
+        const message = tr ? 'Template listesi yüklenemedi' : 'Templates could not be loaded'
+        setLoadError(message)
+        toast.error(message)
+      })
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadTemplates()
   }, [tr])
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(templates.map((item) => item.category || 'General')))], [templates])
@@ -52,7 +68,6 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
     })
   }, [category, search, templates])
   const selected = templates.find((item) => item.id === selectedId)
-  const { activeWorkspaceId } = useWorkspace()
   const sortedVisible = useMemo(() => {
     return [...visible].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite) || (b.rating_average ?? 0) - (a.rating_average ?? 0) || a.title.localeCompare(b.title))
   }, [visible])
@@ -67,7 +82,7 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
     if (!selected) return
     setCreating(true)
     try {
-      const wf = await templatesApi.createWorkflow(selected.id, selected.title, activeWorkspaceId)
+      const wf = await templatesApi.createWorkflow(selected.id, selected.title, activeWorkspaceId, activeProjectId)
       navigate(`/workflows/${wf.id}/edit`)
     } catch {
       toast.error(tr ? 'Workflow oluşturulamadı' : 'Failed to create workflow')
@@ -121,6 +136,28 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
           </div>
         </div>
 
+        {loading ? (
+          <LoadingState
+            variant="modal"
+            rows={8}
+            message={tr ? 'Template akışları yükleniyor...' : 'Loading template flows...'}
+          />
+        ) : loadError ? (
+          <div className="min-h-[440px] flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-[var(--color-danger)]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.007M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-[var(--color-text-primary)]">{tr ? 'Template yüklenemedi' : 'Could not load templates'}</p>
+              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{loadError}</p>
+            </div>
+            <button onClick={loadTemplates} className="h-8 px-4 rounded-lg bg-primary text-white text-[12px] font-medium">
+              {tr ? 'Tekrar dene' : 'Retry'}
+            </button>
+          </div>
+        ) : (
         <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-0">
           <div className="p-3 grid sm:grid-cols-2 gap-2 max-h-[440px] overflow-y-auto">
             {sortedVisible.length === 0 && (
@@ -226,12 +263,13 @@ export default function WorkflowTemplateModal({ onClose }: Props) {
             </div>
           </aside>
         </div>
+        )}
 
         <div className="px-5 py-3 border-t border-[var(--color-border-subtle)] flex items-center justify-end gap-3">
           <button onClick={onClose} className="px-4 h-8 rounded-lg text-[13px] text-[var(--color-text-secondary)] hover:bg-[var(--color-secondary)]">
             {tr ? 'İptal' : 'Cancel'}
           </button>
-          <button onClick={handleCreate} disabled={creating || !selected} className="px-5 h-8 rounded-lg text-[13px] font-medium bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-50">
+          <button onClick={handleCreate} disabled={creating || loading || !selected} className="px-5 h-8 rounded-lg text-[13px] font-medium bg-primary hover:bg-primary-hover text-white transition-colors disabled:opacity-50">
             {creating ? (tr ? 'Oluşturuluyor...' : 'Creating...') : (tr ? 'Workflow oluştur' : 'Create Workflow')}
           </button>
         </div>

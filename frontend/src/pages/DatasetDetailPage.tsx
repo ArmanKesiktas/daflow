@@ -5,6 +5,7 @@ import { filesApi } from '../api/executions'
 import type { DatasetDetail } from '../types/workflow'
 import { useI18n } from '../i18n'
 import { PageHeader } from '../components/ui'
+import LoadingState from '../components/ui/LoadingState'
 
 export default function DatasetDetailPage() {
   const { fileId } = useParams()
@@ -47,9 +48,7 @@ export default function DatasetDetailPage() {
         />
 
         {loading && (
-          <div className="h-64 flex items-center justify-center">
-            <span className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-          </div>
+          <LoadingState variant="list" rows={5} message={lang === 'tr' ? 'Veri kümesi yükleniyor...' : 'Loading dataset...'} />
         )}
 
         {!loading && dataset && (

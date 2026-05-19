@@ -6,6 +6,7 @@ import ActivityFeed from '../features/workspaces/components/ActivityFeed'
 import { useWorkspace } from '../features/workspaces/WorkspaceContext'
 import { useI18n } from '../i18n'
 import toast from 'react-hot-toast'
+import LoadingState from '../components/ui/LoadingState'
 
 export default function WorkspaceDashboardPage() {
   const { workspaceId } = useParams()
@@ -31,7 +32,7 @@ export default function WorkspaceDashboardPage() {
     ]).finally(() => setLoading(false))
   }, [workspaceId, setActiveWorkspaceId])
 
-  if (loading) return <main className="max-w-6xl mx-auto p-8 text-[13px] text-[var(--color-text-muted)]">Loading workspace...</main>
+  if (loading) return <main className="max-w-6xl mx-auto px-6 pt-6 pb-8"><LoadingState variant="grid" rows={5} message={lang === 'tr' ? 'Workspace yükleniyor...' : 'Loading workspace...'} /></main>
   if (!workspace) return <main className="max-w-6xl mx-auto p-8 text-[var(--color-text-primary)]">Workspace not found</main>
   const tr = lang === 'tr'
   const stats = workspace.stats || { datasets: 0, workflows: 0, dashboards: 0, reports: 0, members: 0 }

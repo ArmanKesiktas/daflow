@@ -5,6 +5,7 @@ import { executionsApi } from '../api/executions'
 import { publishApi } from '../api/platform'
 import { useI18n } from '../i18n'
 import { DashboardPanelChart } from '../components/charts/DashboardPanelChart'
+import LoadingState from '../components/ui/LoadingState'
 import {
   applyFilters,
   enhancePanelForRows,
@@ -229,7 +230,7 @@ export default function DashboardPage() {
       )}
 
       <main className="max-w-[1500px] mx-auto px-6 py-6 print:p-0">
-        {loading && <div className="h-80 flex items-center justify-center"><span className="w-6 h-6 border-2 border-[var(--color-border-default)] border-t-[var(--color-text-secondary)] rounded-full animate-spin" /></div>}
+        {loading && <LoadingState variant="grid" rows={6} message={dashLang === 'tr' ? 'Dashboard yükleniyor...' : 'Loading dashboard...'} />}
         {error && <div className="py-20 text-center text-[13px] text-danger">{error}</div>}
 
         {config && (

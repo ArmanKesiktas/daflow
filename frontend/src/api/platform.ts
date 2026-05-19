@@ -17,8 +17,12 @@ export const templatesApi = {
   list: (): Promise<WorkflowTemplate[]> => api.get('/templates/').then((r) => r.data),
   create: (payload: { title: string; category?: string; description?: string; graph_data: unknown; required_columns?: unknown[]; is_public?: boolean }): Promise<WorkflowTemplate> =>
     api.post('/templates/', payload).then((r) => r.data),
-  createWorkflow: (templateId: string, name?: string, workspaceId?: string | null): Promise<{ id: string; name: string }> =>
-    api.post(`/templates/${templateId}/create-workflow`, { name, workspace_id: workspaceId }).then((r) => r.data),
+  createWorkflow: (templateId: string, name?: string, workspaceId?: string | null, projectId?: string | null): Promise<{ id: string; name: string }> =>
+    api.post(`/templates/${templateId}/create-workflow`, {
+      name,
+      workspace_id: workspaceId,
+      project_id: projectId,
+    }).then((r) => r.data),
   favorite: (templateId: string) => api.post(`/templates/${templateId}/favorite`).then((r) => r.data),
   unfavorite: (templateId: string) => api.delete(`/templates/${templateId}/favorite`).then((r) => r.data),
   rate: (templateId: string, rating: number) => api.post(`/templates/${templateId}/rating`, { rating }).then((r) => r.data),
