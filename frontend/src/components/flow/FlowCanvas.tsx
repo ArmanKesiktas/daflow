@@ -139,24 +139,33 @@ function CategoryNodeModal({
               return (
                 <label
                   key={def.type}
-                  className={`flex items-start gap-3 rounded-xl border px-3 py-3 cursor-pointer transition-all ${
+                  className={`flex items-center gap-3 rounded-xl px-3 py-3 cursor-pointer transition-colors ${
                     checked
-                      ? 'border-primary/45 bg-primary/[0.07]'
-                      : 'border-[var(--color-border-subtle)] bg-[var(--color-secondary)] hover:border-[var(--color-border-default)]'
+                      ? 'bg-primary/[0.12] text-primary'
+                      : 'hover:bg-primary/[0.07] text-[var(--color-text-primary)]'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggle(def.type)}
-                    className="mt-0.5 w-4 h-4 rounded border-[var(--color-border-default)] text-primary focus:ring-0 focus:ring-offset-0"
+                    className="sr-only"
                   />
+                  <span className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                    checked ? 'bg-primary text-white' : 'bg-[var(--color-secondary)] text-transparent'
+                  }`}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">{def.icon}</span>
-                      <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{def.label}</span>
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-semibold ${
+                        checked ? 'bg-white/70 dark:bg-white/12 text-primary' : 'bg-primary/10 text-primary'
+                      }`}>{def.icon}</span>
+                      <span className={`text-[13px] font-semibold ${checked ? 'text-primary' : 'text-[var(--color-text-primary)]'}`}>{def.label}</span>
                     </span>
-                    <span className="mt-1 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">{def.description}</span>
+                    <span className={`mt-1 block text-[11px] leading-relaxed ${checked ? 'text-primary/75 dark:text-primary/80' : 'text-[var(--color-text-muted)]'}`}>{def.description}</span>
                   </span>
                 </label>
               )

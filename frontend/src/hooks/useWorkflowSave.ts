@@ -10,25 +10,27 @@ import toast from 'react-hot-toast'
  */
 export function useWorkflowSave() {
   const { getNodes, getEdges, getViewport } = useReactFlow()
-  const { workflowId, workflowName } = useFlowStore()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveNow = useCallback(async () => {
-    if (!workflowId) return
+    const { workflowId: currentWorkflowId, workflowName } = useFlowStore.getState()
+    if (!currentWorkflowId) return true
     try {
       const nodes = getNodes()
       const edges = getEdges()
       const viewport = getViewport()
-      await workflowsApi.save(workflowId, {
+      await workflowsApi.save(currentWorkflowId, {
         name: workflowName,
         nodes: nodes as unknown[],
         edges: edges as unknown[],
         viewport,
       })
+      return true
     } catch {
       toast.error('Failed to save workflow')
+      return false
     }
-  }, [workflowId, workflowName, getNodes, getEdges, getViewport])
+  }, [getNodes, getEdges, getViewport])
 
   const save = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)

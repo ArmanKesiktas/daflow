@@ -48,7 +48,14 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
   const { activeWorkspaceId, activeProjectId } = useWorkspace()
   const workflowsBackPath = activeWorkspaceId && activeProjectId
     ? `/workspaces/${activeWorkspaceId}/projects/${activeProjectId}/workflows`
-    : '/workflows'
+    : activeWorkspaceId
+      ? `/workspaces/${activeWorkspaceId}/workflows`
+      : '/workflows'
+
+  const handleBack = async () => {
+    const saved = await saveNow()
+    if (saved !== false) navigate(workflowsBackPath)
+  }
 
   useEffect(() => {
     if (!editingName) setTempName(workflowName)
@@ -111,18 +118,6 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
       nodes.forEach((node) => updateNodeData(node.id, { status: 'idle' }))
       toast.error(friendlyError(error, lang))
     }
-  }
-
-  const handleSave = async () => {
-    await saveNow()
-    if (workflowId) {
-      try {
-        await workflowsApi.checkpoint(workflowId, workflowName)
-      } catch {
-        // Saving the workflow is more important than retaining an explicit checkpoint.
-      }
-    }
-    toast.success(t('saved'))
   }
 
   const handleCheck = async () => {
@@ -199,9 +194,11 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
   }
 
   const commitName = () => {
-    setWorkflowName(tempName)
+    const nextName = tempName.trim() || workflowName
+    setWorkflowName(nextName)
+    setTempName(nextName)
     setEditingName(false)
-    saveNow()
+    void saveNow()
   }
 
   const openVersions = async () => {
@@ -290,7 +287,7 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
     <header className="h-11 bg-page-bg/95 backdrop-blur-xl border-b border-[var(--color-border-default)] flex items-center px-4 gap-3 flex-shrink-0 z-10">
       {/* Back */}
       <button
-        onClick={() => navigate(workflowsBackPath)}
+        onClick={handleBack}
         title={t('backToWorkflows')}
         className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-secondary)] transition-all"
       >
@@ -474,14 +471,6 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
           <circle cx="12" cy="12" r="8.25" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3.25 2" />
         </svg>
-      </button>
-
-      {/* Actions */}
-      <button
-        onClick={handleSave}
-        className="text-[12px] px-3 h-7 rounded-md text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-secondary)] transition-all"
-      >
-        {t('save')}
       </button>
 
       {isRunning ? (

@@ -285,7 +285,11 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
                 onDragStart={(e) => onCategoryDragStart(e, key)}
                 onClick={() => chooseCategory(key)}
                 title={`${t(labelKey)} · ${defs.length}`}
-                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[var(--color-secondary)] transition-colors flex-shrink-0"
+                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+                  selectedCategory === key
+                    ? 'bg-primary/[0.12]'
+                    : 'hover:bg-primary/[0.08]'
+                }`}
               >
                 <span className={`w-3 h-3 rounded-full ${dot}`} />
               </button>
@@ -342,7 +346,7 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
                 draggable
                 onDragStart={(e) => onCategoryDragStart(e, key)}
                 onClick={() => chooseCategory(key)}
-                className="w-full min-h-[58px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] hover:bg-[var(--color-border-default)] hover:border-[var(--color-border-default)] px-3 py-2.5 text-left transition-all flex items-center gap-3"
+                className="w-full min-h-[58px] rounded-xl px-3 py-2.5 text-left transition-colors flex items-center gap-3 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 <span className={`w-3 h-3 rounded-full ${dot} flex-shrink-0`} />
                 <span className="min-w-0 flex-1">
@@ -392,7 +396,7 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
                 onMouseEnter={() => setHovered(def)}
                 onMouseLeave={() => setHovered(null)}
                 title={nodeDescription(def, t)}
-                className="px-3 py-2.5 rounded-xl bg-[var(--color-secondary)] hover:bg-[var(--color-border-default)] flex items-center gap-3 border border-[var(--color-border-subtle)] hover:border-[var(--color-border-default)] transition-all"
+                className="px-3 py-2.5 rounded-xl hover:bg-primary/[0.08] flex items-center gap-3 transition-colors"
               >
                 <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${CATEGORY_ICON_BG[def.category] ?? 'bg-[var(--color-secondary)]'}`}>
                   {def.icon}
@@ -404,7 +408,7 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
               </div>
             ))}
             {activeDefinitions.length === 0 && (
-              <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] px-3 py-4 text-[12px] text-[var(--color-text-muted)] text-center">
+              <div className="rounded-xl bg-[var(--color-secondary)] px-3 py-4 text-[12px] text-[var(--color-text-muted)] text-center">
                 {lang === 'tr' ? 'Node bulunamadı.' : 'No nodes found.'}
               </div>
             )}
