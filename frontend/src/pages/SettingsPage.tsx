@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { onboardingApi, profileApi } from '../api/platform'
+import { authApi } from '../api/auth'
+import { useAuth } from '../auth/AuthProvider'
 import { useI18n, type Lang } from '../i18n'
 import { useTheme } from '../hooks/useTheme'
 import type { UserPreferences } from '../types/workflow'
@@ -8,9 +10,14 @@ import type { UserPreferences } from '../types/workflow'
 export default function SettingsPage() {
   const { lang, setLang } = useI18n()
   const { theme, setTheme } = useTheme()
+  const { session } = useAuth()
   const tr = lang === 'tr'
   const [prefs, setPrefs] = useState<UserPreferences | null>(null)
   const [saving, setSaving] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
 
   useEffect(() => {
     profileApi.getPreferences().then((next) => {
@@ -45,6 +52,38 @@ export default function SettingsPage() {
     await onboardingApi.save({ completed_steps: [] }).catch(() => null)
     update({ completed_tours: [] })
     toast.success(tr ? 'Sayfa turları sıfırlandı' : 'Page tours reset')
+  }
+
+  const changePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast.error(tr ? 'Tüm alanları doldurun' : 'Fill in all fields')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error(tr ? 'Şifreler eşleşmiyor' : 'Passwords do not match')
+      return
+    }
+    if (newPassword.length < 6) {
+      toast.error(tr ? 'Şifre en az 6 karakter olmalı' : 'Password must be at least 6 characters')
+      return
+    }
+    if (!session?.access_token) {
+      toast.error(tr ? 'Oturum bulunamadı' : 'Session not found')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      await authApi.updatePassword(session.access_token, newPassword)
+      toast.success(tr ? 'Şifre güncellendi' : 'Password updated')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : (tr ? 'Şifre güncellenemedi' : 'Password could not be updated')
+      toast.error(msg)
+    } finally {
+      setSavingPassword(false)
+    }
   }
 
   return (
@@ -98,6 +137,48 @@ export default function SettingsPage() {
           </button>
           <button onClick={save} disabled={saving || !prefs} className="h-9 px-5 rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium disabled:opacity-45 disabled:cursor-not-allowed hover:bg-[var(--color-primary-hover)] transition-colors duration-150">
             {saving ? (tr ? 'Kaydediliyor...' : 'Saving...') : (tr ? 'Kaydet' : 'Save')}
+          </button>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-lg border border-[var(--color-border-default)] bg-[#ffffff] dark:bg-[#1C1C1E] shadow-sm p-4 space-y-5">
+        <div>
+          <h2 className="text-[15px] font-semibold text-[var(--color-text-primary)]">{tr ? 'Şifre değiştir' : 'Change password'}</h2>
+          <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{tr ? 'Hesap şifrenizi güncelleyin.' : 'Update your account password.'}</p>
+        </div>
+        <label className="block">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5 block">{tr ? 'Mevcut şifre' : 'Current password'}</span>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full h-9 rounded-md border border-[var(--color-border-default)] bg-black/[0.04] dark:bg-white/[0.06] px-3 text-[13px] outline-none text-[var(--color-text-primary)] focus:ring-2 focus:ring-primary/50"
+            placeholder={tr ? 'Mevcut şifreniz' : 'Your current password'}
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5 block">{tr ? 'Yeni şifre' : 'New password'}</span>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full h-9 rounded-md border border-[var(--color-border-default)] bg-black/[0.04] dark:bg-white/[0.06] px-3 text-[13px] outline-none text-[var(--color-text-primary)] focus:ring-2 focus:ring-primary/50"
+            placeholder={tr ? 'En az 6 karakter' : 'At least 6 characters'}
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5 block">{tr ? 'Yeni şifre (tekrar)' : 'Confirm new password'}</span>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full h-9 rounded-md border border-[var(--color-border-default)] bg-black/[0.04] dark:bg-white/[0.06] px-3 text-[13px] outline-none text-[var(--color-text-primary)] focus:ring-2 focus:ring-primary/50"
+            placeholder={tr ? 'Şifreyi tekrar girin' : 'Re-enter password'}
+          />
+        </label>
+        <div className="flex justify-end pt-2">
+          <button onClick={changePassword} disabled={savingPassword || !newPassword || !confirmPassword} className="h-9 px-5 rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium disabled:opacity-45 disabled:cursor-not-allowed hover:bg-[var(--color-primary-hover)] transition-colors duration-150">
+            {savingPassword ? (tr ? 'Güncelleniyor...' : 'Updating...') : (tr ? 'Şifreyi güncelle' : 'Update password')}
           </button>
         </div>
       </section>

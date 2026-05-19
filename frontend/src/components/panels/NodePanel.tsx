@@ -154,6 +154,12 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Collect branches and pass results onward',
     defaultConfig: { mode: 'merge' },
   },
+  {
+    type: 'code_sql',
+    label: 'SQL Query', icon: '⌨', category: 'utility',
+    description: 'Write SQL against upstream data',
+    defaultConfig: { query: 'SELECT * FROM input_data LIMIT 100', input_node: '' },
+  },
 
   // ── Charts ──────────────────────────────────────────────────
   ...CHART_DEFINITIONS.map((chart) => ({
@@ -194,9 +200,15 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Generate structured PDF report',
     defaultConfig: { title: 'Data Analysis Report', include_data: false },
   },
+  {
+    type: 'export_output',
+    label: 'Export Output', icon: '⬇', category: 'output',
+    description: 'Export data to Excel, CSV, or JSON',
+    defaultConfig: { format: 'xlsx', filename: 'output', columns: [], include_charts: false, include_summary: false },
+  },
 ]
 
-const CATEGORIES: { key: NodeCategory; labelKey: TranslationKey; accent: string; dot: string }[] = [
+export const CATEGORIES: { key: NodeCategory; labelKey: TranslationKey; accent: string; dot: string }[] = [
   { key: 'source',      labelKey: 'source',      accent: 'text-[#0071E3]',  dot: 'bg-[#0071E3]' },
   { key: 'preparation', labelKey: 'preparation',  accent: 'text-[#F5A623]',  dot: 'bg-[#F5A623]' },
   { key: 'analysis',    labelKey: 'analysis',     accent: 'text-[#30D158]',  dot: 'bg-[#30D158]' },
@@ -222,32 +234,30 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
   const { t, lang } = useI18n()
   const [query, setQuery] = useState('')
   const [hovered, setHovered] = useState<NodeDefinition | null>(null)
-  const [openCategories, setOpenCategories] = useState<Partial<Record<NodeCategory, boolean>>>({
-    source: true,
-    preparation: true,
-    analysis: true,
-    big_data: true,
-    utility: true,
-    visualization: false,
-    ml: true,
-    output: true,
-  })
+  const [selectedCategory, setSelectedCategory] = useState<NodeCategory | null>(null)
 
-  const onDragStart = (e: React.DragEvent, nodeType: string) => {
-    e.dataTransfer.setData('application/dataflow-node', nodeType)
+  const onCategoryDragStart = (e: React.DragEvent, category: NodeCategory) => {
+    e.dataTransfer.setData('application/dataflow-category', category)
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  const toggleCategory = (category: NodeCategory) => {
-    setOpenCategories((current) => ({
-      ...current,
-      [category]: !current[category],
-    }))
-  }
   const matchesQuery = (def: NodeDefinition) => {
     const needle = query.trim().toLowerCase()
     if (!needle) return true
     return `${nodeLabel(def, t)} ${nodeDescription(def, t)} ${def.type}`.toLowerCase().includes(needle)
+  }
+  const queryActive = query.trim().length > 0
+  const filteredDefinitions = NODE_DEFINITIONS.filter(matchesQuery)
+  const activeCategory = queryActive ? null : selectedCategory
+  const activeCategoryMeta = activeCategory ? CATEGORIES.find((category) => category.key === activeCategory) : null
+  const activeDefinitions = queryActive
+    ? filteredDefinitions
+    : activeCategory
+      ? NODE_DEFINITIONS.filter((def) => def.category === activeCategory)
+      : []
+  const chooseCategory = (category: NodeCategory) => {
+    setSelectedCategory(category)
+    if (collapsed) onToggle?.()
   }
 
   // ── Collapsed: icon-only strip ───────────────────────────────────────────
@@ -265,22 +275,21 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
           </svg>
         </button>
         <div className="flex flex-col gap-1.5 items-center">
-          {CATEGORIES.map(({ key }) => {
+          {CATEGORIES.map(({ key, labelKey, dot }) => {
             const defs = NODE_DEFINITIONS.filter((d) => d.category === key)
-            const iconBg = CATEGORY_ICON_BG[key] ?? 'bg-[var(--color-secondary)]'
-            return defs.map((def) => (
-              <div
-                key={def.type}
+            return (
+              <button
+                key={key}
+                type="button"
                 draggable
-                onDragStart={(e) => onDragStart(e, def.type)}
-                onMouseEnter={() => setHovered(def)}
-                onMouseLeave={() => setHovered(null)}
-                title={`${nodeLabel(def, t)} — ${nodeDescription(def, t)}`}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white cursor-grab active:cursor-grabbing hover:scale-110 transition-transform flex-shrink-0 ${iconBg}`}
+                onDragStart={(e) => onCategoryDragStart(e, key)}
+                onClick={() => chooseCategory(key)}
+                title={`${t(labelKey)} · ${defs.length}`}
+                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[var(--color-secondary)] transition-colors flex-shrink-0"
               >
-                {def.icon}
-              </div>
-            ))
+                <span className={`w-3 h-3 rounded-full ${dot}`} />
+              </button>
+            )
           })}
         </div>
       </aside>
@@ -312,7 +321,6 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
             value={query}
             onChange={(event) => {
               setQuery(event.target.value)
-              setOpenCategories((current) => Object.fromEntries(CATEGORIES.map(({ key }) => [key, true])) as Partial<Record<NodeCategory, boolean>>)
             }}
             placeholder={lang === 'tr' ? 'Node ara...' : 'Search nodes...'}
             className="min-w-0 flex-1 bg-transparent outline-none text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
@@ -320,66 +328,89 @@ export default function NodePanel({ collapsed = false, onToggle }: { collapsed?:
         </div>
       </div>
 
-      {CATEGORIES.map(({ key, labelKey, accent, dot }) => {
-        const defs = NODE_DEFINITIONS.filter((d) => d.category === key && matchesQuery(d))
-        if (defs.length === 0 && query.trim()) return null
-        const iconBg = CATEGORY_ICON_BG[key] ?? 'bg-[var(--color-secondary)]'
-        const isOpen = openCategories[key] ?? false
-        return (
-          <div key={key} className="mb-2">
-            <button
-              type="button"
-              onClick={() => toggleCategory(key)}
-              aria-expanded={isOpen}
-              className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-[var(--color-secondary)] transition-colors"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-80`} />
-              <span className={`min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-widest ${accent} opacity-80 truncate`}>
-                {t(labelKey)}
-              </span>
-              <span className="text-[10px] tabular-nums text-[var(--color-text-muted)]">{defs.length}</span>
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                fill="none"
-                className={`text-[var(--color-text-muted)] transition-transform duration-200 ease-out ${isOpen ? 'rotate-90' : ''}`}
-                aria-hidden="true"
+      {!activeCategory && !queryActive && (
+        <div className="px-3 pb-4 space-y-2">
+          <p className="px-1 pb-1 text-[10px] uppercase tracking-[0.14em] font-semibold text-[var(--color-text-muted)]">
+            {lang === 'tr' ? 'Kategori seç' : 'Choose category'}
+          </p>
+          {CATEGORIES.map(({ key, labelKey, accent, dot }) => {
+            const defs = NODE_DEFINITIONS.filter((d) => d.category === key)
+            return (
+              <button
+                key={key}
+                type="button"
+                draggable
+                onDragStart={(e) => onCategoryDragStart(e, key)}
+                onClick={() => chooseCategory(key)}
+                className="w-full min-h-[58px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] hover:bg-[var(--color-border-default)] hover:border-[var(--color-border-default)] px-3 py-2.5 text-left transition-all flex items-center gap-3"
               >
-                <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+                <span className={`w-3 h-3 rounded-full ${dot} flex-shrink-0`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[11px] font-semibold uppercase tracking-[0.12em] ${accent}`}>{t(labelKey)}</span>
+                  <span className="mt-1 block text-[11px] text-[var(--color-text-muted)]">
+                    {defs.length} {lang === 'tr' ? 'node seçeneği' : 'node options'}
+                  </span>
+                </span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[var(--color-text-muted)] flex-shrink-0" aria-hidden="true">
+                  <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
-            <div
-              aria-hidden={!isOpen}
-              className={`overflow-hidden transition-all duration-200 ease-out ${isOpen ? 'opacity-100' : 'opacity-0'}`}
-              style={{ maxHeight: isOpen ? `${defs.length * 58}px` : '0px' }}
-            >
-              <div className="pb-2">
-                {defs.map((def) => (
-                  <div
-                    key={def.type}
-                    draggable
-                    onDragStart={(e) => onDragStart(e, def.type)}
-                    onMouseEnter={() => setHovered(def)}
-                    onMouseLeave={() => setHovered(null)}
-                    title={nodeDescription(def, t)}
-                    className="mx-3 mb-1 px-3 py-2.5 rounded-xl bg-[var(--color-secondary)] hover:bg-[var(--color-border-default)] cursor-grab active:cursor-grabbing flex items-center gap-3 border border-[var(--color-border-subtle)] hover:border-[var(--color-border-default)] transition-all"
-                  >
-                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${iconBg}`}>
-                      {def.icon}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-[12px] font-medium text-[var(--color-text-primary)] leading-tight truncate">{nodeLabel(def, t)}</div>
-                      <div className="text-[10px] text-[var(--color-text-muted)] leading-tight truncate mt-0.5">{nodeDescription(def, t)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {(activeCategory || queryActive) && (
+        <div className="px-3 pb-4">
+          <div className="mb-3 flex items-center gap-2">
+            {!queryActive && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-secondary)] transition-colors"
+                title={lang === 'tr' ? 'Kategorilere dön' : 'Back to categories'}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                  <path d="M8 2L4 6l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[var(--color-text-muted)]">
+                {queryActive ? (lang === 'tr' ? 'Arama sonuçları' : 'Search results') : (lang === 'tr' ? 'Node seçenekleri' : 'Node options')}
+              </p>
+              <p className={`mt-0.5 text-[12px] font-semibold truncate ${activeCategoryMeta?.accent ?? 'text-[var(--color-text-primary)]'}`}>
+                {queryActive ? `${activeDefinitions.length} ${lang === 'tr' ? 'sonuç' : 'results'}` : activeCategoryMeta ? t(activeCategoryMeta.labelKey) : ''}
+              </p>
             </div>
           </div>
-        )
-      })}
+
+          <div className="space-y-1.5">
+            {activeDefinitions.map((def) => (
+              <div
+                key={def.type}
+                onMouseEnter={() => setHovered(def)}
+                onMouseLeave={() => setHovered(null)}
+                title={nodeDescription(def, t)}
+                className="px-3 py-2.5 rounded-xl bg-[var(--color-secondary)] hover:bg-[var(--color-border-default)] flex items-center gap-3 border border-[var(--color-border-subtle)] hover:border-[var(--color-border-default)] transition-all"
+              >
+                <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 ${CATEGORY_ICON_BG[def.category] ?? 'bg-[var(--color-secondary)]'}`}>
+                  {def.icon}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[12px] font-medium text-[var(--color-text-primary)] leading-tight truncate">{nodeLabel(def, t)}</div>
+                  <div className="text-[10px] text-[var(--color-text-muted)] leading-tight truncate mt-0.5">{nodeDescription(def, t)}</div>
+                </div>
+              </div>
+            ))}
+            {activeDefinitions.length === 0 && (
+              <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] px-3 py-4 text-[12px] text-[var(--color-text-muted)] text-center">
+                {lang === 'tr' ? 'Node bulunamadı.' : 'No nodes found.'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {hovered && <NodeHoverPreview def={hovered} t={t} lang={lang as DashboardLang} />}
     </aside>
   )

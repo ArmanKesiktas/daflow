@@ -2,6 +2,7 @@ import { memo, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { BaseNode } from './BaseNode'
+import { useNodeContextMenu } from '../../hooks/useNodeContextMenu'
 import type { NodeData } from '../../types/workflow'
 import { executionsApi } from '../../api/executions'
 import { useExecutionStore } from '../../store/executionStore'
@@ -96,6 +97,7 @@ function renderMLModel(output: RawOutput, pos: PopupPos) {
 function MLNodeFactory(icon: string, renderPopup?: (output: RawOutput, pos: PopupPos) => React.ReactNode) {
   return memo(function MLNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
     const executionId = useExecutionStore((s) => s.executionId)
+    const contextMenu = useNodeContextMenu(id)
     const [nodeOutput, setNodeOutput] = useState<RawOutput | null>(null)
     const [popupPos, setPopupPos] = useState<PopupPos | null>(null)
     const [loading, setLoading] = useState(false)
@@ -143,9 +145,11 @@ function MLNodeFactory(icon: string, renderPopup?: (output: RawOutput, pos: Popu
           color="bg-[#FF6B6B]"
           category={data.category}
           selected={selected}
+          disabled={Boolean(data.disabled)}
           note={data.note ? String(data.note) : undefined}
           error_message={data.error_message}
           cached={data.cached}
+          contextMenu={contextMenu}
         >
           {data.status === 'success' && renderPopup && (
             <span className="text-[var(--color-text-muted)] text-[10px]">Hover to preview</span>

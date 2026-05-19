@@ -12,6 +12,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react'
 import type { NodeData } from '../types/workflow'
+import type { ProcessAreaData, ProcessAreaColor } from '../components/flow/ProcessAreaNode'
 
 interface FlowSnapshot {
   nodes: Node<NodeData>[]
@@ -42,6 +43,8 @@ interface FlowState {
   setWorkflowId: (id: string | null) => void
   setWorkflowName: (name: string) => void
   setRfInstance: (instance: ReactFlowInstance<Node<NodeData>, Edge> | null) => void
+  addProcessArea: (position: { x: number; y: number }, overrides?: Partial<ProcessAreaData>) => void
+  updateProcessArea: (id: string, patch: Partial<ProcessAreaData>) => void
   loadGraph: (nodes: Node<NodeData>[], edges: Edge[], viewport: Viewport) => void
   undo: () => void
   redo: () => void
@@ -132,6 +135,56 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   setWorkflowId: (id) => set({ workflowId: id }),
   setWorkflowName: (name) => set({ workflowName: name }),
   setRfInstance: (instance) => set({ rfInstance: instance }),
+
+  addProcessArea: (position, overrides) => {
+    const current = get()
+    const newArea: Node<NodeData> = {
+      id: crypto.randomUUID(),
+      type: 'process_area',
+      position,
+      dragHandle: '.drag-handle',
+      data: {
+        label: overrides?.title || 'Process Area',
+        title: overrides?.title || 'Process Area',
+        description: overrides?.description || '',
+        color: overrides?.color || ('blue' as ProcessAreaColor),
+        width: overrides?.width || 400,
+        height: overrides?.height || 300,
+        category: 'utility',
+        config: {},
+        status: 'idle',
+      } as NodeData,
+      style: {
+        width: overrides?.width || 400,
+        height: overrides?.height || 300,
+      },
+    }
+    set({
+      past: [...current.past, { nodes: current.nodes, edges: current.edges }],
+      future: [],
+      nodes: [...current.nodes, newArea],
+    })
+  },
+
+  updateProcessArea: (id, patch) => {
+    const current = get()
+    set({
+      past: [...current.past, { nodes: current.nodes, edges: current.edges }],
+      future: [],
+      nodes: current.nodes.map((n) => {
+        if (n.id !== id || n.type !== 'process_area') return n
+        const updatedData = { ...n.data, ...patch }
+        // Keep label in sync with title
+        if (patch.title !== undefined) {
+          updatedData.label = patch.title
+        }
+        const updatedStyle = { ...n.style }
+        if (patch.width !== undefined) updatedStyle.width = patch.width
+        if (patch.height !== undefined) updatedStyle.height = patch.height
+        return { ...n, data: updatedData, style: updatedStyle }
+      }),
+    })
+  },
 
   loadGraph: (nodes, edges, viewport) => {
     const rf = get().rfInstance

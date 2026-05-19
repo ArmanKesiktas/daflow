@@ -24,7 +24,7 @@ export default function HeroSection() {
         }}
       />
 
-      <SectionWrapper className="relative z-10 w-full max-w-6xl mx-auto px-6 pt-28 pb-20" animation="fade-up">
+      <SectionWrapper className="relative z-10 w-full max-w-6xl mx-auto px-6 pt-28 pb-20" animation="scale-up">
         <div className="max-w-3xl">
           {/* Headline with gradient text */}
           <h1 className="text-[40px] md:text-[56px] lg:text-[64px] font-bold leading-[1.1] tracking-tight bg-gradient-to-r from-gray-900 via-gray-800 to-blue-800 dark:from-white dark:via-blue-100 dark:to-blue-300 bg-clip-text text-transparent">

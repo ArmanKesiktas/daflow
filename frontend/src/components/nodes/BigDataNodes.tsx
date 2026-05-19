@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import { BaseNode } from './BaseNode'
+import { ConnectedBaseNode } from './ConnectedBaseNode'
 import { NodePreview } from './NodePreview'
 import type { NodeData } from '../../types/workflow'
 
@@ -17,16 +17,18 @@ function BigDataNodeFactory(icon: string, summaryHandle: string) {
     return (
       <NodePreview nodeId={id} data={data}>
         <Handle type="target" position={Position.Left} id="dataframe" />
-        <BaseNode
+        <ConnectedBaseNode
+          nodeId={id}
           label={data.label}
           icon={icon}
           status={data.status}
           color=""
           category={data.category}
           selected={selected}
+          disabled={Boolean(data.disabled)}
         >
           {detail && <span className="text-[var(--color-text-muted)]">{detail}</span>}
-        </BaseNode>
+        </ConnectedBaseNode>
         <Handle type="source" position={Position.Right} id="dataframe" style={{ top: '38%' }} />
         <Handle type="source" position={Position.Right} id={summaryHandle} style={{ top: '64%' }} />
       </NodePreview>

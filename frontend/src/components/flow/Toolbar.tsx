@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { workflowsApi } from '../../api/workflows'
-import { executionsApi } from '../../api/executions'
 import { useFlowStore } from '../../store/flowStore'
 import { useExecutionStore } from '../../store/executionStore'
 import { useWorkflowSave } from '../../hooks/useWorkflowSave'
@@ -42,6 +41,7 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([])
   const [scheduleDraft, setScheduleDraft] = useState<Partial<WorkflowSchedule>>({ frequency: 'daily', time_of_day: '09:00', timezone: 'Europe/Istanbul', is_active: true })
   const [validationResult, setValidationResult] = useState<WorkflowValidationResult | null>(null)
+  const [automationActive, setAutomationActive] = useState(false)
   const navigate = useNavigate()
   const { isDark, toggleTheme } = useTheme()
   const { lang, setLang, t } = useI18n()
@@ -53,6 +53,37 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
   useEffect(() => {
     if (!editingName) setTempName(workflowName)
   }, [workflowName])
+
+  useEffect(() => {
+    if (!workflowId) return
+    let cancelled = false
+    let timer: number | undefined
+
+    const pollAutomation = async () => {
+      try {
+        const status = await workflowsApi.automationStatus(workflowId)
+        if (cancelled) return
+        setAutomationActive(status.active)
+        if (status.active) {
+          setRunning(true)
+          if (status.current_execution_id && status.current_execution_id !== executionId) {
+            onRunComplete(status.current_execution_id)
+          }
+        }
+      } catch {
+        if (!cancelled) setAutomationActive(false)
+      }
+    }
+
+    if (automationActive || isRunning) {
+      pollAutomation()
+      timer = window.setInterval(pollAutomation, 3000)
+    }
+    return () => {
+      cancelled = true
+      if (timer) window.clearInterval(timer)
+    }
+  }, [automationActive, executionId, isRunning, onRunComplete, setRunning, workflowId])
 
   const handleRun = async () => {
     if (!workflowId) return toast.error(t('failedToSave'))
@@ -72,7 +103,9 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
         })
       })
       const res = await workflowsApi.run(workflowId)
-      toast.success(t('workflowStarted'))
+      setAutomationActive(true)
+      setRunning(true)
+      toast.success(lang === 'tr' ? 'Workflow otomasyonu başladı' : 'Workflow automation started')
       onRunComplete(res.execution_id)
     } catch (error) {
       nodes.forEach((node) => updateNodeData(node.id, { status: 'idle' }))
@@ -111,11 +144,12 @@ export default function Toolbar({ onRunComplete, onOpenTemplates }: ToolbarProps
   }
 
   const handleStop = async () => {
-    if (!executionId) return
+    if (!workflowId) return
     try {
-      await executionsApi.cancel(executionId)
+      await workflowsApi.stop(workflowId, executionId)
+      setAutomationActive(false)
       setRunning(false)
-      toast.success(t('workflowStopped'))
+      toast.success(lang === 'tr' ? 'Workflow otomasyonu durduruldu' : 'Workflow automation stopped')
     } catch {
       toast.error(t('failedToStop'))
     }

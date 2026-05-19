@@ -55,7 +55,7 @@ export default function WorkspaceDashboardPage() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold leading-7 text-[var(--color-text-primary)] mb-1">{workspace.name}</h1>
-          <p className="text-[15px] leading-[22px] text-[var(--color-text-muted)]">{workspace.description || 'Takım veri analiz çalışma alanı.'}</p>
+          <p className="text-[15px] leading-[22px] text-[var(--color-text-muted)]">{workspace.description || 'Veri analiz çalışma alanı.'}</p>
         </div>
         <span className="h-8 px-3 rounded-full bg-surface border border-[var(--color-border-default)] inline-flex items-center text-[12px] text-[var(--color-text-secondary)]">
           {workspace.role || 'member'}
@@ -87,9 +87,9 @@ export default function WorkspaceDashboardPage() {
               </span>
             </div>
             <div className="grid sm:grid-cols-3 gap-2">
-              <QuickAction icon={<DatasetIcon />} label={tr ? 'Veri yükle' : 'Upload dataset'} detail={tr ? 'CSV / Excel ekle' : 'Add CSV / Excel'} onClick={() => navigate('/datasets')} />
-              <QuickAction icon={<WorkflowIcon />} label={tr ? 'Workflow oluştur' : 'Create workflow'} detail={tr ? 'Canvas aç' : 'Open canvas'} onClick={() => navigate('/workflows')} />
-              <QuickAction icon={<DashboardIcon />} label={tr ? 'Dashboard aç' : 'Open dashboards'} detail={tr ? 'Çıktıları gör' : 'Review outputs'} onClick={() => navigate('/dashboards')} />
+              <QuickAction icon={<DatasetIcon />} label={tr ? 'Veri yükle' : 'Upload dataset'} detail={tr ? 'CSV / Excel ekle' : 'Add CSV / Excel'} onClick={() => navigate(`/workspaces/${workspace.id}/files`)} />
+              <QuickAction icon={<WorkflowIcon />} label={tr ? 'Workflow oluştur' : 'Create workflow'} detail={tr ? 'Canvas aç' : 'Open canvas'} onClick={() => navigate(`/workspaces/${workspace.id}/workflows`)} />
+              <QuickAction icon={<DashboardIcon />} label={tr ? 'Dashboard aç' : 'Open dashboards'} detail={tr ? 'Çıktıları gör' : 'Review outputs'} onClick={() => navigate(`/workspaces/${workspace.id}/dashboards`)} />
             </div>
           </div>
 
@@ -198,39 +198,81 @@ function ProjectMemberMap({
 
       {visibleProjects.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--color-border-default)] p-8 text-center text-[13px] text-[var(--color-text-muted)]">
-          {tr ? 'Henüz proje yok. Proje oluşturunca burada takım haritası görünecek.' : 'No projects yet. Create a project to see the team map here.'}
+          {tr ? 'Henüz proje yok. Proje oluşturunca burada proje haritası görünecek.' : 'No projects yet. Create a project to see the project map here.'}
         </div>
       ) : (
         <div className="grid lg:grid-cols-2 gap-3">
           {visibleProjects.map((project) => (
-            <article key={project.id} className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-[13px] font-semibold truncate text-[var(--color-text-primary)]">{project.name}</h3>
-                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)] truncate">{project.description || (tr ? 'Proje açıklaması yok' : 'No project description')}</p>
-                </div>
-                <span className="shrink-0 text-[10px] px-2 h-6 rounded-full bg-surface border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] inline-flex items-center">
-                  {(project.stats?.workflows ?? 0)} WF
-                </span>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {activeMembers.slice(0, 7).map((member) => (
-                  <MemberChip key={`${project.id}-${member.id}`} member={member} />
-                ))}
-                {activeMembers.length > 7 && (
-                  <span className="h-7 px-2 rounded-full bg-surface border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-secondary)] inline-flex items-center">
-                    +{activeMembers.length - 7}
-                  </span>
-                )}
-                {activeMembers.length === 0 && (
-                  <span className="text-[12px] text-[var(--color-text-muted)]">{tr ? 'Aktif üye yok' : 'No active members'}</span>
-                )}
-              </div>
-            </article>
+            <ProjectCard key={project.id} project={project} members={activeMembers} tr={tr} workspaceId={projects[0] ? undefined : undefined} />
           ))}
         </div>
       )}
     </section>
+  )
+}
+
+function ProjectCard({ project, members, tr }: { project: WorkspaceProject; members: WorkspaceMember[]; tr: boolean; workspaceId?: string }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const navigate = useNavigate()
+  const { lang } = useI18n()
+
+  return (
+    <article className="group relative rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] p-4 hover:border-[var(--color-border-default)] transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold truncate text-[var(--color-text-primary)]">{project.name}</h3>
+          <p className="mt-1 text-[11px] text-[var(--color-text-muted)] truncate">{project.description || (tr ? 'Proje açıklaması yok' : 'No project description')}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] px-2 h-6 rounded-full bg-surface border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] inline-flex items-center">
+            {(project.stats?.workflows ?? 0)} WF
+          </span>
+          {/* Three-dot menu — visible on hover */}
+          <div className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
+              className="w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-all"
+              aria-label="Project actions"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[var(--color-text-muted)]">
+                <circle cx="8" cy="3" r="1.5" />
+                <circle cx="8" cy="8" r="1.5" />
+                <circle cx="8" cy="13" r="1.5" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded-xl border border-[var(--color-border-default)] bg-[#ffffff] dark:bg-[#1C1C1E] shadow-xl py-1">
+                  <button onClick={() => { setMenuOpen(false); navigate(`/workspaces/${project.workspace_id}/projects/${project.id}`) }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-secondary)] transition-colors">
+                    {tr ? 'Aç' : 'Open'}
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); toast.success(tr ? 'Paylaşım linki kopyalandı' : 'Share link copied'); navigator.clipboard.writeText(window.location.origin + `/workspaces/${project.workspace_id}/projects/${project.id}`) }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-secondary)] transition-colors">
+                    {tr ? 'Paylaş' : 'Share'}
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); toast.success(tr ? 'Proje silme henüz desteklenmiyor' : 'Project deletion not yet supported') }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[#FF453A] hover:bg-[#FF453A]/[0.08] transition-colors">
+                    {tr ? 'Sil' : 'Delete'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {members.slice(0, 7).map((member) => (
+          <MemberChip key={`${project.id}-${member.id}`} member={member} />
+        ))}
+        {members.length > 7 && (
+          <span className="h-7 px-2 rounded-full bg-surface border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-secondary)] inline-flex items-center">
+            +{members.length - 7}
+          </span>
+        )}
+        {members.length === 0 && (
+          <span className="text-[12px] text-[var(--color-text-muted)]">{tr ? 'Aktif üye yok' : 'No active members'}</span>
+        )}
+      </div>
+    </article>
   )
 }
 

@@ -2,6 +2,7 @@ import { memo, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { BaseNode } from './BaseNode'
+import { useNodeContextMenu } from '../../hooks/useNodeContextMenu'
 import type { NodeData } from '../../types/workflow'
 import { executionsApi } from '../../api/executions'
 import { useExecutionStore } from '../../store/executionStore'
@@ -157,6 +158,7 @@ type PopupRender = (output: RawOutput, pos: PopupPos) => React.ReactNode
 function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
   return memo(function TransformNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
     const executionId = useExecutionStore((s) => s.executionId)
+    const contextMenu = useNodeContextMenu(id)
     const method = (data.config as { method?: string }).method
 
     const [nodeOutput, setNodeOutput] = useState<RawOutput | null>(null)
@@ -206,9 +208,11 @@ function TransformNodeFactory(icon: string, renderPopup?: PopupRender) {
           color="bg-[#FF9F0A]"
           category={data.category}
           selected={selected}
+          disabled={Boolean(data.disabled)}
           note={data.note ? String(data.note) : undefined}
           error_message={data.error_message}
           cached={data.cached}
+          contextMenu={contextMenu}
         >
           {method && <span className="text-[var(--color-text-muted)] capitalize">{method}</span>}
           {data.status === 'success' && renderPopup && (
@@ -243,6 +247,7 @@ export const CustomPythonNode = TransformNodeFactory('λ', renderCustomPython)
 
 export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const executionId = useExecutionStore((s) => s.executionId)
+  const contextMenu = useNodeContextMenu(id)
   const [nodeOutput, setNodeOutput] = useState<RawOutput | null>(null)
   const [popupPos, setPopupPos] = useState<PopupPos | null>(null)
   const [loading, setLoading] = useState(false)
@@ -293,8 +298,10 @@ export const JoinNode = memo(function JoinNode({ id, data, selected }: NodeProps
         color="bg-[#FF9F0A]"
         category={data.category}
         selected={selected}
+        disabled={Boolean(data.disabled)}
         note={data.note ? String(data.note) : undefined}
         error_message={data.error_message}
+        contextMenu={contextMenu}
       >
         <span className="text-[var(--color-text-muted)] text-[10px]">Left / Right inputs</span>
         {data.status === 'success' && (

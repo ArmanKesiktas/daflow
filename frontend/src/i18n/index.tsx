@@ -157,7 +157,7 @@ const translations = {
     landing_feature_ai_desc: 'Get intelligent analysis summaries and anomaly detection powered by advanced AI models.',
     landing_feature_dashboard_title: 'Dashboards & Reports',
     landing_feature_dashboard_desc: 'Generate interactive dashboards and exportable PDF reports from your analysis results.',
-    landing_feature_collab_title: 'Team Collaboration',
+    landing_feature_collab_title: 'Workspace Collaboration',
     landing_feature_collab_desc: 'Work together with role-based access, comments, activity feeds, and shared workspaces.',
     landing_feature_bigdata_title: 'Big Data Ready',
     landing_feature_bigdata_desc: 'Process large datasets with chunk processing, MapReduce aggregation, and streaming pipelines.',
@@ -179,7 +179,7 @@ const translations = {
     landing_step3_desc: 'Run your workflow and instantly get dashboards, reports, and AI-powered insights.',
 
     // Landing page – Trust
-    landing_trust_title: 'Trusted by data teams',
+    landing_trust_title: 'Trusted by data professionals',
     landing_stat_users: 'Active Users',
     landing_stat_workflows: 'Workflows Run',
     landing_stat_datasources: 'Data Sources',
@@ -201,7 +201,7 @@ const translations = {
     landing_pricing_pro_f1: 'Unlimited workflows',
     landing_pricing_pro_f2: '10GB storage',
     landing_pricing_pro_f3: 'AI insights & ML nodes',
-    landing_pricing_pro_f4: 'Team collaboration',
+    landing_pricing_pro_f4: 'Workspace collaboration',
     landing_pricing_pro_f5: 'Priority support',
     landing_pricing_pro_f6: 'Custom dashboards',
     landing_pricing_ent_f1: 'Everything in Pro',
@@ -211,7 +211,7 @@ const translations = {
     landing_pricing_ent_f5: 'Custom integrations',
 
     // Landing page – Footer
-    landing_footer_desc: 'The modern data analysis platform for teams.',
+    landing_footer_desc: 'The modern data analysis platform for workspaces.',
     landing_footer_product: 'Product',
     landing_footer_company: 'Company',
     landing_footer_legal: 'Legal',
@@ -375,7 +375,7 @@ const translations = {
     landing_feature_ai_desc: 'Gelişmiş AI modelleri ile akıllı analiz özetleri ve anomali tespiti alın.',
     landing_feature_dashboard_title: 'Dashboard ve Raporlar',
     landing_feature_dashboard_desc: 'Analiz sonuçlarınızdan interaktif dashboardlar ve dışa aktarılabilir PDF raporlar üretin.',
-    landing_feature_collab_title: 'Takım İşbirliği',
+    landing_feature_collab_title: 'Workspace İşbirliği',
     landing_feature_collab_desc: 'Rol tabanlı erişim, yorumlar, aktivite akışı ve paylaşılan workspace ile birlikte çalışın.',
     landing_feature_bigdata_title: 'Büyük Veri Desteği',
     landing_feature_bigdata_desc: 'Chunk processing, MapReduce ve streaming pipeline ile büyük veri setlerini işleyin.',
@@ -397,7 +397,7 @@ const translations = {
     landing_step3_desc: 'Workflow u çalıştırın ve anında dashboard, rapor ve AI destekli içgörüler elde edin.',
 
     // Landing page – Trust
-    landing_trust_title: 'Veri ekipleri tarafından tercih ediliyor',
+    landing_trust_title: 'Veri profesyonelleri tarafından tercih ediliyor',
     landing_stat_users: 'Aktif Kullanıcı',
     landing_stat_workflows: 'Çalıştırılan Workflow',
     landing_stat_datasources: 'Veri Kaynağı',
@@ -419,7 +419,7 @@ const translations = {
     landing_pricing_pro_f1: 'Sınırsız workflow',
     landing_pricing_pro_f2: '10GB depolama',
     landing_pricing_pro_f3: 'AI içgörüler ve ML node ları',
-    landing_pricing_pro_f4: 'Takım işbirliği',
+    landing_pricing_pro_f4: 'Workspace işbirliği',
     landing_pricing_pro_f5: 'Öncelikli destek',
     landing_pricing_pro_f6: 'Özel dashboardlar',
     landing_pricing_ent_f1: 'Pro daki her şey',
@@ -429,7 +429,7 @@ const translations = {
     landing_pricing_ent_f5: 'Özel entegrasyonlar',
 
     // Landing page – Footer
-    landing_footer_desc: 'Takımlar için modern veri analizi platformu.',
+    landing_footer_desc: 'Workspace tabanlı modern veri analizi platformu.',
     landing_footer_product: 'Ürün',
     landing_footer_company: 'Şirket',
     landing_footer_legal: 'Yasal',

@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
-import { BaseNode } from './BaseNode'
+import { ConnectedBaseNode } from './ConnectedBaseNode'
 import type { NodeData } from '../../types/workflow'
 import { useExecutionStore } from '../../store/executionStore'
 import { NodePreview } from './NodePreview'
@@ -12,12 +12,12 @@ export const ReportNode = memo(function ReportNode({ id, data, selected }: NodeP
     <NodePreview nodeId={id} data={data}>
       <Handle type="target" position={Position.Left} id="dataframe" />
       <Handle type="target" position={Position.Left} id="statistics" style={{ top: '60%' }} />
-      <BaseNode label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected}>
+      <ConnectedBaseNode nodeId={id} label={title} icon="⊡" status={data.status} color="" category={data.category} selected={selected} disabled={Boolean(data.disabled)}>
         <span>Generates structured PDF report</span>
         {data.status === 'success' && (
           <span className="text-[#30D158]">Report ready</span>
         )}
-      </BaseNode>
+      </ConnectedBaseNode>
       <Handle type="source" position={Position.Right} id="report_data" />
     </NodePreview>
   )
@@ -29,19 +29,21 @@ export const AIInsightsNode = memo(function AIInsightsNode({ id, data, selected 
     <NodePreview nodeId={id} data={data}>
       <Handle type="target" position={Position.Left} id="report_data" />
       <Handle type="target" position={Position.Left} id="dataframe" style={{ top: '70%' }} />
-      <BaseNode
+      <ConnectedBaseNode
+        nodeId={id}
         label="AI Insights"
         icon="◈"
         status={data.status}
         color=""
         category={data.category}
         selected={selected}
+        disabled={Boolean(data.disabled)}
       >
         <span className="capitalize">Provider: {provider}</span>
         {data.status === 'success' && (
           <span className="text-[#30D158]">Insights generated</span>
         )}
-      </BaseNode>
+      </ConnectedBaseNode>
       <Handle type="source" position={Position.Right} id="insights" />
     </NodePreview>
   )
@@ -58,7 +60,7 @@ export const DashboardNode = memo(function DashboardNode({ id, data, selected }:
       <Handle type="target" position={Position.Left} id="anomaly_summary"  style={{ top: '50%' }} />
       <Handle type="target" position={Position.Left} id="correlation_matrix" style={{ top: '66%' }} />
       <Handle type="target" position={Position.Left} id="distributions"   style={{ top: '82%' }} />
-      <BaseNode label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected}>
+      <ConnectedBaseNode nodeId={id} label={title} icon="⊞" status={data.status} color="" category={data.category} selected={selected} disabled={Boolean(data.disabled)}>
         <span>Modular analysis dashboard</span>
         {data.status === 'success' && (
           <>
@@ -76,7 +78,7 @@ export const DashboardNode = memo(function DashboardNode({ id, data, selected }:
             )}
           </>
         )}
-      </BaseNode>
+      </ConnectedBaseNode>
     </NodePreview>
   )
 })

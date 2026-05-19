@@ -20,6 +20,7 @@ import WorkspaceProjectsPage from './pages/WorkspaceProjectsPage'
 import WorkspaceProjectDetailPage from './pages/WorkspaceProjectDetailPage'
 import InvitationPage from './pages/InvitationPage'
 import HelpPage from './pages/HelpPage'
+import NotFoundPage from './pages/NotFoundPage'
 import SettingsPage from './pages/SettingsPage'
 import MarketingInfoPage from './pages/MarketingInfoPage'
 import { useWorkspace } from './features/workspaces/WorkspaceContext'
@@ -87,6 +88,7 @@ export default function App() {
       <Route path="/help" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
       <Route path="/articles" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
     </Suspense>
   )

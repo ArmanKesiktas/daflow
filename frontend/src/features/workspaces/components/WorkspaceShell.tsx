@@ -123,10 +123,10 @@ export default function WorkspaceShell({ children }: WorkspaceShellProps) {
     },
     {
       label: tr ? 'Üyeler ve Roller' : 'Members & Roles',
-      detail: tr ? 'Takım erişim yönetimi' : 'Team access management',
+      detail: tr ? 'Workspace erişim yönetimi' : 'Workspace access management',
       path: membersPath,
       icon: <MembersIcon />,
-      keywords: ['member', 'members', 'team', 'role', 'roles', 'üye', 'uye', 'takım', 'takim', 'rol'],
+      keywords: ['member', 'members', 'workspace', 'role', 'roles', 'üye', 'uye', 'çalışma alanı', 'calisma alani', 'rol'],
     },
     {
       label: tr ? 'Workspace Ayarları' : 'Workspace Settings',
@@ -496,7 +496,7 @@ function WorkspaceSidebar({
 
       {!collapsed && <div className="mt-5 mb-2 px-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-          {tr ? 'Ekip' : 'Team'}
+          {tr ? 'Workspace' : 'Workspace'}
         </p>
       </div>}
       <div className={`space-y-1 ${collapsed ? 'mt-4' : ''}`}>

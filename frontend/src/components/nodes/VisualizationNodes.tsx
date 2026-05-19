@@ -2,6 +2,7 @@ import { memo, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { BaseNode } from './BaseNode'
+import { useNodeContextMenu } from '../../hooks/useNodeContextMenu'
 import type { NodeData } from '../../types/workflow'
 import { executionsApi } from '../../api/executions'
 import { useExecutionStore } from '../../store/executionStore'
@@ -71,6 +72,7 @@ function ChartPopup({ panel, pos }: { panel: ChartPanelData; pos: PopupPos }) {
 function VisualizationNodeFactory(icon: string) {
   return memo(function VisualizationNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
     const executionId = useExecutionStore((s) => s.executionId)
+    const contextMenu = useNodeContextMenu(id)
     const nodeStatus = data.status
 
     const [popup, setPopup] = useState<ChartPanelData | null>(null)
@@ -122,9 +124,11 @@ function VisualizationNodeFactory(icon: string) {
           color="bg-[#5E5CE6]"
           category="visualization"
           selected={selected}
+          disabled={Boolean(data.disabled)}
           note={data.note ? String(data.note) : undefined}
           error_message={data.error_message}
           cached={data.cached}
+          contextMenu={contextMenu}
         >
           {loading && (
             <span className="text-[#5E5CE6] text-[10px]">Loading…</span>

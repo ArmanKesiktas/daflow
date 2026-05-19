@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import { BaseNode } from './BaseNode'
+import { ConnectedBaseNode } from './ConnectedBaseNode'
 import type { NodeData } from '../../types/workflow'
 import { NodePreview } from './NodePreview'
 
@@ -12,13 +12,15 @@ function AnalysisNodeFactory(icon: string, color: string, extraHandles: string[]
     return (
       <NodePreview nodeId={id} data={data}>
         <Handle type="target" position={Position.Left} id="dataframe" />
-        <BaseNode
+        <ConnectedBaseNode
+          nodeId={id}
           label={data.label}
           icon={icon}
           status={data.status}
           color={color}
           category={data.category}
           selected={selected}
+          disabled={Boolean(data.disabled)}
         >
           {method && <span className="text-[var(--color-text-muted)] capitalize">{method}</span>}
           {data.resultPreview && (
@@ -26,7 +28,7 @@ function AnalysisNodeFactory(icon: string, color: string, extraHandles: string[]
               {JSON.stringify(data.resultPreview).slice(0, 60)}…
             </span>
           )}
-        </BaseNode>
+        </ConnectedBaseNode>
         {/* dataframe always at top */}
         <Handle
           type="source"

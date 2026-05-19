@@ -17,8 +17,21 @@ export const workflowsApi = {
   delete: (id: string): Promise<void> =>
     api.delete(`/workflows/${id}`).then((r) => r.data),
 
-  run: (id: string): Promise<{ execution_id: string; status: string }> =>
+  run: (id: string): Promise<{ execution_id: string; status: string; continuous?: boolean; automation_id?: string }> =>
     api.post(`/executions/workflows/${id}/run`).then((r) => r.data),
+
+  stop: (id: string, executionId?: string | null): Promise<{ workflow_id: string; status: string; execution_id?: string | null }> =>
+    api.post(`/executions/workflows/${id}/stop`, { execution_id: executionId || undefined }).then((r) => r.data),
+
+  automationStatus: (id: string): Promise<{
+    workflow_id: string
+    active: boolean
+    automation_id?: string | null
+    current_execution_id?: string | null
+    last_run_at?: string | null
+    next_run_at?: string | null
+  }> =>
+    api.get(`/executions/workflows/${id}/automation-status`).then((r) => r.data),
 
   listShares: (workflowId: string) =>
     api.get(`/workflows/${workflowId}/shares`).then((r) => r.data),

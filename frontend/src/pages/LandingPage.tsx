@@ -9,6 +9,7 @@ import FeaturesSection from '../components/landing/FeaturesSection'
 import ShowcaseSection from '../components/landing/ShowcaseSection'
 import HowItWorksSection from '../components/landing/HowItWorksSection'
 import TrustSection from '../components/landing/TrustSection'
+import PricingSection from '../components/landing/PricingSection'
 import LandingFooter from '../components/landing/LandingFooter'
 
 export default function LandingPage() {
@@ -72,6 +73,7 @@ export default function LandingPage() {
       <ShowcaseSection />
       <HowItWorksSection />
       <TrustSection />
+      <PricingSection />
       <LandingFooter />
     </div>
   )

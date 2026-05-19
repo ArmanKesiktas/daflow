@@ -1,3 +1,4 @@
+import { ProcessAreaNode } from '../flow/ProcessAreaNode'
 import { FileUploadNode } from './FileUploadNode'
 import { DatabaseQueryNode } from './DatabaseQueryNode'
 import {
@@ -14,13 +15,14 @@ import {
 import { ReportNode, DashboardNode } from './OutputNodes'
 import { TrainTestSplitNode, MLModelNode } from './MLNodes'
 import { ChartNode } from './ChartNode'
+import { CategoryNode } from './CategoryNode'
 import {
   ChunkProcessingNode,
   LargeDatasetProfilerNode,
   MapReduceAggregationNode,
   SparkGroupByNode,
 } from './BigDataNodes'
-import { RouteNode } from './UtilityNodes'
+import { RouteNode, CodeSQLNode } from './UtilityNodes'
 import { JoinNode } from './TransformationNodes'
 
 /**
@@ -28,6 +30,8 @@ import { JoinNode } from './TransformationNodes'
  * Maps node `type` strings → custom React components.
  */
 export const nodeTypes = {
+  process_area:            ProcessAreaNode,
+  category_node:           CategoryNode,
   file_upload:             FileUploadNode,
   database_query:          DatabaseQueryNode,
   column_type_detection:   ColumnTypeDetectionNode,
@@ -46,6 +50,7 @@ export const nodeTypes = {
   large_dataset_profiler:  LargeDatasetProfilerNode,
   join_node:               JoinNode,
   route_node:              RouteNode,
+  code_sql:                CodeSQLNode,
   train_test_split:        TrainTestSplitNode,
   ml_model:                MLModelNode,
   bar_chart:               ChartNode,

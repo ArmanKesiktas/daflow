@@ -13,8 +13,8 @@ import {
 import { useFlowStore } from '../../store/flowStore'
 import { nodeTypes } from '../nodes/nodeTypes'
 import { useWorkflowSave } from '../../hooks/useWorkflowSave'
-import type { NodeData } from '../../types/workflow'
-import { NODE_DEFINITIONS, type NodeDefinition } from '../panels/NodePanel'
+import type { NodeCategory, NodeData } from '../../types/workflow'
+import { CATEGORIES, NODE_DEFINITIONS, type NodeDefinition } from '../panels/NodePanel'
 const uuid = () => crypto.randomUUID()
 
 interface FlowCanvasProps {
@@ -29,6 +29,11 @@ interface ContextMenu {
 
 interface PendingNode {
   def: NodeDefinition
+  position: { x: number; y: number }
+}
+
+interface PendingCategoryNode {
+  category: NodeCategory
   position: { x: number; y: number }
 }
 
@@ -90,6 +95,92 @@ function InfoPill({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
       <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">{value}</p>
     </div>
+  )
+}
+
+function CategoryNodeModal({
+  pending,
+  onAdd,
+  onClose,
+}: {
+  pending: PendingCategoryNode
+  onAdd: (selectedTypes: string[]) => void
+  onClose: () => void
+}) {
+  const defs = NODE_DEFINITIONS.filter((def) => def.category === pending.category)
+  const [selected, setSelected] = useState<string[]>(() => defs[0] ? [defs[0].type] : [])
+  const meta = CATEGORIES.find((category) => category.key === pending.category)
+
+  const toggle = (type: string) => {
+    setSelected((current) => (
+      current.includes(type)
+        ? current.filter((item) => item !== type)
+        : [...current, type]
+    ))
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg mx-4 rounded-2xl border border-[var(--color-border-default)] bg-surface shadow-2xl overflow-hidden">
+        <div className="p-5 border-b border-[var(--color-border-subtle)]">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--color-text-muted)]">Configure category node</p>
+          <h3 className="mt-1 text-[17px] font-semibold text-[var(--color-text-primary)]">
+            {categoryTitle(pending.category)} Node
+          </h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+            Select one or more operations. They will run inside a single canvas node in the order shown.
+          </p>
+        </div>
+        <div className="p-4 max-h-[430px] overflow-y-auto">
+          <div className="grid grid-cols-1 gap-2">
+            {defs.map((def) => {
+              const checked = selected.includes(def.type)
+              return (
+                <label
+                  key={def.type}
+                  className={`flex items-start gap-3 rounded-xl border px-3 py-3 cursor-pointer transition-all ${
+                    checked
+                      ? 'border-primary/45 bg-primary/[0.07]'
+                      : 'border-[var(--color-border-subtle)] bg-[var(--color-secondary)] hover:border-[var(--color-border-default)]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(def.type)}
+                    className="mt-0.5 w-4 h-4 rounded border-[var(--color-border-default)] text-primary focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">{def.icon}</span>
+                      <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{def.label}</span>
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">{def.description}</span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--color-border-subtle)] flex items-center justify-between gap-2">
+          <span className={`text-[11px] font-semibold ${meta?.accent ?? 'text-[var(--color-text-muted)]'}`}>
+            {selected.length} selected
+          </span>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="h-8 px-4 rounded-lg text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-secondary)] transition-colors">Cancel</button>
+            <button
+              onClick={() => onAdd(selected)}
+              disabled={selected.length === 0}
+              className="h-8 px-4 rounded-lg bg-primary text-white text-[12px] font-medium hover:bg-primary-hover transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+            >
+              Add node
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -190,6 +281,7 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [noteModal, setNoteModal] = useState<{ nodeId: string; note: string } | null>(null)
   const [pendingNode, setPendingNode] = useState<PendingNode | null>(null)
+  const [pendingCategoryNode, setPendingCategoryNode] = useState<PendingCategoryNode | null>(null)
 
   const commitNode = useCallback((pending: PendingNode) => {
     const newNode: Node<NodeData> = {
@@ -204,8 +296,42 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
       },
     }
     addNode(newNode)
+    setSelectedNode(newNode.id)
+    onNodeSelect(newNode.id)
     save()
-  }, [addNode, save])
+  }, [addNode, setSelectedNode, onNodeSelect, save])
+
+  const commitCategoryNode = useCallback((pending: PendingCategoryNode, selectedTypes: string[]) => {
+    const defs = selectedTypes
+      .map((type) => NODE_DEFINITIONS.find((def) => def.type === type))
+      .filter((def): def is NodeDefinition => Boolean(def))
+    if (!defs.length) return
+
+    const first = defs[0]
+    const newNode: Node<NodeData> = {
+      id: uuid(),
+      type: 'category_node',
+      position: pending.position,
+      data: {
+        label: categoryTitle(pending.category),
+        category: pending.category,
+        config: {
+          ...first.defaultConfig,
+          node_category: pending.category,
+          operations: defs.map((def) => ({
+            type: def.type,
+            label: def.label,
+            config: { ...def.defaultConfig },
+          })),
+        },
+        status: 'idle',
+      },
+    }
+    addNode(newNode)
+    setSelectedNode(newNode.id)
+    onNodeSelect(newNode.id)
+    save()
+  }, [addNode, setSelectedNode, onNodeSelect, save])
 
   // Drag-and-drop from node panel
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -217,7 +343,16 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
     (e: React.DragEvent) => {
       e.preventDefault()
       const nodeType = e.dataTransfer.getData('application/dataflow-node')
-      if (!nodeType || !rfRef.current) return
+      const category = e.dataTransfer.getData('application/dataflow-category') as NodeCategory
+      if (!rfRef.current) return
+
+      if (category) {
+        const position = rfRef.current.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+        setPendingCategoryNode({ category, position })
+        return
+      }
+
+      if (!nodeType) return
 
       const def: NodeDefinition | undefined = NODE_DEFINITIONS.find((d) => d.type === nodeType)
       if (!def) return
@@ -230,6 +365,14 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
   )
 
   const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setSelectedNode(node.id)
+      onNodeSelect(node.id)
+    },
+    [setSelectedNode, onNodeSelect],
+  )
+
+  const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
       setSelectedNode(node.id)
       onNodeSelect(node.id)
@@ -322,6 +465,7 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
         }}
         onConnect={(conn) => { onConnect(conn); save() }}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onPaneClick={onPaneClick}
         onNodeContextMenu={onNodeContextMenu}
         onMoveEnd={(_, vp) => setViewport(vp)}
@@ -388,6 +532,28 @@ export default function FlowCanvas({ onNodeSelect }: FlowCanvasProps) {
           onClose={() => setPendingNode(null)}
         />
       )}
+      {pendingCategoryNode && (
+        <CategoryNodeModal
+          pending={pendingCategoryNode}
+          onAdd={(selectedTypes) => {
+            commitCategoryNode(pendingCategoryNode, selectedTypes)
+            setPendingCategoryNode(null)
+          }}
+          onClose={() => setPendingCategoryNode(null)}
+        />
+      )}
     </>
   )
+}
+
+function categoryTitle(category: NodeCategory) {
+  if (category === 'source') return 'Data Source'
+  if (category === 'preparation') return 'Preparation'
+  if (category === 'analysis') return 'Analysis'
+  if (category === 'big_data') return 'Big Data'
+  if (category === 'utility') return 'Utility'
+  if (category === 'visualization') return 'Charts'
+  if (category === 'ml') return 'Machine Learning'
+  if (category === 'output') return 'Output'
+  return 'Node'
 }

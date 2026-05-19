@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '../../i18n'
 import SectionWrapper from './SectionWrapper'
+import PricingMascot from './PricingMascot'
 
 interface PricingTier {
   id: 'free' | 'pro' | 'enterprise'
@@ -65,7 +66,7 @@ export default function PricingSection() {
     <SectionWrapper
       id="pricing"
       className="py-20 md:py-28 px-6 bg-gray-50/80 dark:bg-white/[0.02] border-y border-black/[0.06] dark:border-white/[0.06]"
-      animation="fade-up"
+      animation="scale-up"
     >
       <div className="max-w-5xl mx-auto">
         {/* Header */}
@@ -122,16 +123,19 @@ export default function PricingSection() {
               </ul>
 
               {/* CTA */}
-              <button
-                onClick={() => navigate(`/login?plan=${tier.id}`)}
-                className={`mt-8 w-full h-11 rounded-xl text-[14px] font-semibold transition-all ${
-                  tier.highlighted
-                    ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.10] text-[var(--color-text-primary)] border border-black/[0.08] dark:border-white/[0.10]'
-                }`}
-              >
-                {tier.cta}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => navigate(`/login?plan=${tier.id}`)}
+                  className={`mt-8 w-full h-11 rounded-xl text-[14px] font-semibold transition-all ${
+                    tier.highlighted
+                      ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white shadow-lg shadow-blue-500/20'
+                      : 'bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.10] text-[var(--color-text-primary)] border border-black/[0.08] dark:border-white/[0.10]'
+                  }`}
+                >
+                  {tier.cta}
+                </button>
+                {tier.highlighted && <PricingMascot />}
+              </div>
             </div>
           ))}
         </div>

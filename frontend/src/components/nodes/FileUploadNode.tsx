@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import { BaseNode } from './BaseNode'
+import { ConnectedBaseNode } from './ConnectedBaseNode'
 import type { NodeData } from '../../types/workflow'
 import { NodePreview } from './NodePreview'
 
@@ -9,13 +9,15 @@ export const FileUploadNode = memo(function FileUploadNode({
 }: NodeProps<Node<NodeData>>) {
   return (
     <NodePreview nodeId={id} data={data}>
-      <BaseNode
+      <ConnectedBaseNode
+        nodeId={id}
         label={data.filename ? String(data.filename) : 'File Upload'}
         icon="↑"
         status={data.status}
         color=""
         category={data.category}
         selected={selected}
+        disabled={Boolean(data.disabled)}
       >
         {data.filename && (
           <div className="text-[var(--color-text-secondary)] truncate max-w-[160px]">{data.filename}</div>
@@ -26,7 +28,7 @@ export const FileUploadNode = memo(function FileUploadNode({
             {String((data.resultPreview as { column_count?: number }).column_count ?? '')} cols
           </div>
         )}
-      </BaseNode>
+      </ConnectedBaseNode>
       <Handle type="source" position={Position.Right} id="dataframe" />
     </NodePreview>
   )

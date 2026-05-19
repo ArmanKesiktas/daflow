@@ -1,6 +1,8 @@
 import { memo } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { NodePreview } from './NodePreview'
+import { BaseNode } from './BaseNode'
+import { ConnectedBaseNode } from './ConnectedBaseNode'
 import type { NodeData, NodeStatus } from '../../types/workflow'
 
 const statusBorder: Record<NodeStatus, string> = {
@@ -43,6 +45,33 @@ export const RouteNode = memo(function RouteNode({ id, data, selected }: NodePro
           </span>
         )}
       </div>
+      <Handle type="source" position={Position.Right} id="dataframe" />
+    </NodePreview>
+  )
+})
+
+export const CodeSQLNode = memo(function CodeSQLNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
+  const config = data.config as { query?: string }
+  const queryPreview = config.query ? config.query.slice(0, 40) : ''
+
+  return (
+    <NodePreview nodeId={id} data={data}>
+      <Handle type="target" position={Position.Left} id="dataframe" />
+      <ConnectedBaseNode
+        nodeId={id}
+        label={data.label}
+        icon="⌨"
+        status={data.status}
+        color="bg-[#8E8E93]"
+        category={data.category}
+        selected={selected}
+        disabled={Boolean(data.disabled)}
+        error_message={data.error_message}
+      >
+        {queryPreview && (
+          <span className="font-mono text-[10px] text-[var(--color-text-muted)] truncate block">{queryPreview}…</span>
+        )}
+      </ConnectedBaseNode>
       <Handle type="source" position={Position.Right} id="dataframe" />
     </NodePreview>
   )

@@ -2,6 +2,7 @@ import { memo, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { BaseNode } from './BaseNode'
+import { useNodeContextMenu } from '../../hooks/useNodeContextMenu'
 import type { NodeData } from '../../types/workflow'
 import { executionsApi } from '../../api/executions'
 import { useExecutionStore } from '../../store/executionStore'
@@ -95,6 +96,7 @@ const DB_COLORS: Record<string, string> = {
 export const DatabaseQueryNode = memo(function DatabaseQueryNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const cfg = (data.config ?? {}) as Record<string, unknown>
   const executionId = useExecutionStore((s) => s.executionId)
+  const contextMenu = useNodeContextMenu(id)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -137,9 +139,11 @@ export const DatabaseQueryNode = memo(function DatabaseQueryNode({ id, data, sel
         color={dbColor}
         category={data.category}
         selected={selected}
+        disabled={Boolean(data.disabled)}
         note={data.note ? String(data.note) : undefined}
         error_message={data.error_message}
         cached={data.cached}
+        contextMenu={contextMenu}
       >
         <span className="flex items-center gap-1.5">
           <span className="text-[var(--color-text-secondary)] capitalize">{dbType}</span>

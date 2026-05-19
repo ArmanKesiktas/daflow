@@ -14,6 +14,8 @@ export interface NodeData extends Record<string, unknown> {
   config: NodeConfig
   status: NodeStatus
   resultPreview?: Record<string, unknown>
+  /** When true, node is skipped during execution and rendered at 40% opacity */
+  disabled?: boolean
   // File upload specific
   fileId?: string
   storagePath?: string
@@ -258,7 +260,7 @@ export interface WorkflowSchedule {
   id: string
   workflow_id: string
   user_id: string
-  frequency: 'hourly' | 'daily' | 'weekly'
+  frequency: 'continuous' | 'hourly' | 'daily' | 'weekly'
   time_of_day?: string
   timezone: string
   is_active: boolean

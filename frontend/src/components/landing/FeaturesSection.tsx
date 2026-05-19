@@ -57,7 +57,7 @@ export default function FeaturesSection() {
   ]
 
   return (
-    <SectionWrapper id="features" className="py-20 md:py-28 px-6" animation="fade-up">
+    <SectionWrapper id="features" className="py-20 md:py-28 px-6" animation="stagger-children">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">

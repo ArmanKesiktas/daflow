@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { onboardingApi } from '../api/platform'
 import { useAuth } from '../auth/AuthProvider'
@@ -199,8 +199,8 @@ const TOURS: Record<TourKey, TourStep[]> = {
       selectors: ['[data-tour="workspace-stats"]'],
       title: { tr: 'Workspace özeti', en: 'Workspace overview' },
       description: {
-        tr: 'Takımınızın aktivitesi, veri sayısı, workflow ve dashboard metrikleri burada.',
-        en: 'Team activity, dataset count, workflow and dashboard metrics live here.',
+        tr: 'Workspace aktivitesi, veri sayısı, workflow ve dashboard metrikleri burada.',
+        en: 'Workspace activity, dataset count, workflow and dashboard metrics live here.',
       },
     },
     {
@@ -308,10 +308,19 @@ const TOURS: Record<TourKey, TourStep[]> = {
       title: { tr: 'Benimle paylaşılan', en: 'Shared with me' },
       description: {
         tr: 'Ekip üyelerinin sizinle paylaştığı workflow ve raporları burada görürsünüz.',
-        en: 'Workflows and reports shared with you by teammates appear here.',
+        en: 'Workflows and reports shared with you by workspace members appear here.',
       },
     },
   ],
+}
+
+const DMO_INTRO_STEP: TourStep = {
+  selectors: ['main', '#root'],
+  title: { tr: 'Merhaba, ben DMO', en: 'Hi, I am DMO' },
+  description: {
+    tr: 'Bu sayfada ne yapabileceğini sana kısaca göstereceğim. Mavi çerçeve o anda anlattığım alanı işaretler.',
+    en: 'I will quickly show you what you can do on this page. The blue frame marks the area I am explaining.',
+  },
 }
 
 function routeToKey(pathname: string): TourKey | null {
@@ -350,17 +359,22 @@ export default function PageTour() {
   const { lang } = useI18n()
   const { session, userEmail } = useAuth()
 
-  const key = useMemo(() => routeToKey(location.pathname), [location.pathname])
-  const steps = key ? TOURS[key] : []
+  const key = useMemo<TourKey | null>(() => routeToKey(location.pathname), [location.pathname])
+  const accountKey = session?.user?.id || userEmail || 'anonymous'
+  const introStorageKey = `daflow_tour_intro:${accountKey}`
+  const [showIntro, setShowIntro] = useState(() => localStorage.getItem(introStorageKey) !== 'done')
+  const steps = useMemo<TourStep[]>(() => (key ? [...(showIntro ? [DMO_INTRO_STEP] : []), ...TOURS[key]] : []), [key, showIntro])
   const [stepIndex, setStepIndex] = useState(0)
   const [visible, setVisible] = useState(false)
   const [rect, setRect] = useState<Rect | null>(null)
-  const recordedRef = useRef<string | null>(null)
 
-  const accountKey = session?.user?.id || userEmail || 'anonymous'
   const storageKey = key ? `daflow_tour:${accountKey}:${key}` : ''
   const legacyKey = key ? `daflow_tour:${key}` : ''
   const completedKey = key ? `tour:${key}` : ''
+
+  useEffect(() => {
+    setShowIntro(localStorage.getItem(introStorageKey) !== 'done')
+  }, [introStorageKey])
 
   // Initial load — check if tour is already completed
   useEffect(() => {
@@ -368,7 +382,6 @@ export default function PageTour() {
       setVisible(false)
       return
     }
-    recordedRef.current = null
     setStepIndex(0)
 
     const localDone =
@@ -396,14 +409,6 @@ export default function PageTour() {
 
     return () => clearTimeout(timer)
   }, [key, steps.length, storageKey, legacyKey, completedKey])
-
-  // Mark as completed when user interacts (seen the tour)
-  useEffect(() => {
-    if (!visible || !key || recordedRef.current === key) return
-    recordedRef.current = key
-    localStorage.setItem(storageKey, 'done')
-    onboardingApi.save({ completed_steps: [completedKey] }).catch(() => null)
-  }, [visible, key, storageKey, completedKey])
 
   // Find and track the highlighted target
   const updateRect = useCallback(() => {
@@ -446,6 +451,9 @@ export default function PageTour() {
   }, [updateRect])
 
   const finish = useCallback(() => {
+    if (steps[stepIndex] === DMO_INTRO_STEP) {
+      localStorage.setItem(introStorageKey, 'done')
+    }
     localStorage.setItem(storageKey, 'done')
     setVisible(false)
     onboardingApi
@@ -455,15 +463,18 @@ export default function PageTour() {
         return onboardingApi.save({ completed_steps: next })
       })
       .catch(() => null)
-  }, [storageKey, completedKey])
+  }, [storageKey, completedKey, introStorageKey, stepIndex, steps])
 
   const next = useCallback(() => {
+    if (steps[stepIndex] === DMO_INTRO_STEP) {
+      localStorage.setItem(introStorageKey, 'done')
+    }
     if (stepIndex >= steps.length - 1) {
       finish()
     } else {
       setStepIndex((i) => i + 1)
     }
-  }, [stepIndex, steps.length, finish])
+  }, [stepIndex, steps, introStorageKey, finish])
 
   const prev = useCallback(() => {
     setStepIndex((i) => Math.max(0, i - 1))
@@ -477,26 +488,24 @@ export default function PageTour() {
 
   // Compute panel position near the target, with smart side selection
   const panelPos = computePanelPosition(rect)
+  const highlightStyle = rect
+    ? {
+        left: Math.max(8, rect.left - 8),
+        top: Math.max(8, rect.top - 8),
+        width: rect.width + 16,
+        height: rect.height + 16,
+        boxShadow:
+          '0 0 0 9999px rgba(0,0,0,0.0), 0 0 0 4px rgba(10,132,255,0.25), 0 0 32px rgba(10,132,255,0.45)',
+      }
+    : undefined
 
   return (
     <>
-      {/* Dimmed backdrop with hole around the target */}
-      <div className="fixed inset-0 z-[9990] pointer-events-none">
-        <div className="absolute inset-0 bg-black/35 dark:bg-black/55 transition-opacity" />
-      </div>
-
       {/* Highlight box */}
-      {rect && (
+      {highlightStyle && (
         <div
           className="fixed z-[9991] pointer-events-none rounded-2xl border-[3px] border-[#0A84FF] transition-all duration-300 ease-out"
-          style={{
-            left: Math.max(8, rect.left - 8),
-            top: Math.max(8, rect.top - 8),
-            width: rect.width + 16,
-            height: rect.height + 16,
-            boxShadow:
-              '0 0 0 9999px rgba(0,0,0,0.0), 0 0 0 4px rgba(10,132,255,0.25), 0 0 32px rgba(10,132,255,0.45)',
-          }}
+          style={highlightStyle}
         />
       )}
 
@@ -513,7 +522,7 @@ export default function PageTour() {
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-3">
             <div className="flex-1 flex gap-1">
-              {steps.map((_, i) => (
+              {steps.map((_step: TourStep, i: number) => (
                 <div
                   key={i}
                   className={`h-1 flex-1 rounded-full transition-all ${
@@ -620,8 +629,11 @@ function computePanelPosition(rect: Rect | null): React.CSSProperties {
   const PANEL_WIDTH = 360
   const PANEL_HEIGHT = 200
   const PADDING = 20
+  const MIN_TOP_WITH_MASCOT = 84
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const clampLeft = (left: number) => Math.min(Math.max(PADDING, left), vw - PANEL_WIDTH - PADDING)
+  const clampTop = (top: number) => Math.min(Math.max(PADDING, top), vh - PANEL_HEIGHT - PADDING)
 
   // No target — center the panel (first load)
   if (!rect) {
@@ -631,41 +643,31 @@ function computePanelPosition(rect: Rect | null): React.CSSProperties {
     }
   }
 
+  const centeredLeft = clampLeft(rect.left + rect.width / 2 - PANEL_WIDTH / 2)
   // Try to place below the target
   const belowTop = rect.top + rect.height + PADDING
+  if (rect.top < MIN_TOP_WITH_MASCOT) {
+    return { left: `${centeredLeft}px`, top: `${clampTop(Math.max(MIN_TOP_WITH_MASCOT, belowTop))}px` }
+  }
   if (belowTop + PANEL_HEIGHT < vh - PADDING) {
-    const left = Math.min(
-      Math.max(PADDING, rect.left + rect.width / 2 - PANEL_WIDTH / 2),
-      vw - PANEL_WIDTH - PADDING
-    )
-    return { left: `${left}px`, top: `${belowTop}px` }
+    return { left: `${centeredLeft}px`, top: `${clampTop(belowTop)}px` }
   }
 
   // Try to place to the right
   const rightLeft = rect.left + rect.width + PADDING
   if (rightLeft + PANEL_WIDTH < vw - PADDING) {
-    const top = Math.min(
-      Math.max(PADDING, rect.top + rect.height / 2 - PANEL_HEIGHT / 2),
-      vh - PANEL_HEIGHT - PADDING
-    )
+    const top = clampTop(rect.top + rect.height / 2 - PANEL_HEIGHT / 2)
     return { left: `${rightLeft}px`, top: `${top}px` }
   }
 
   // Try to place to the left
   const leftRight = rect.left - PADDING - PANEL_WIDTH
   if (leftRight > PADDING) {
-    const top = Math.min(
-      Math.max(PADDING, rect.top + rect.height / 2 - PANEL_HEIGHT / 2),
-      vh - PANEL_HEIGHT - PADDING
-    )
+    const top = clampTop(rect.top + rect.height / 2 - PANEL_HEIGHT / 2)
     return { left: `${leftRight}px`, top: `${top}px` }
   }
 
   // Fallback: place above the target
-  const aboveTop = Math.max(PADDING, rect.top - PADDING - PANEL_HEIGHT)
-  const left = Math.min(
-    Math.max(PADDING, rect.left + rect.width / 2 - PANEL_WIDTH / 2),
-    vw - PANEL_WIDTH - PADDING
-  )
-  return { left: `${left}px`, top: `${aboveTop}px` }
+  const aboveTop = clampTop(rect.top - PADDING - PANEL_HEIGHT)
+  return { left: `${centeredLeft}px`, top: `${aboveTop}px` }
 }

@@ -18,7 +18,7 @@ export default function ShowcaseSection() {
   ]
 
   return (
-    <SectionWrapper id="showcase" className="py-20 md:py-28 px-6" animation="fade-up">
+    <SectionWrapper id="showcase" className="py-20 md:py-28 px-6" animation="scale-up">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-10 md:mb-14">

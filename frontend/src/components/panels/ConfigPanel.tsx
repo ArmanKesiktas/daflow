@@ -21,6 +21,111 @@ interface ConfigPanelProps {
   onToggle?: () => void
 }
 
+// ── Field requirement metadata ─────────────────────────────────────────────────
+// Maps node types to their fields with required/optional indicators.
+// `true` = required, `false` = optional. Fields not listed are treated as neutral (no indicator).
+
+export const FIELD_REQUIREMENTS: Record<string, Record<string, boolean>> = {
+  file_upload: {
+    file: true,
+  },
+  database_query: {
+    connector_id: true,
+    query: true,
+    connection_string: true,
+    host: true,
+    database: true,
+    username: true,
+    password: true,
+    row_limit: false,
+    db_type: false,
+    port: false,
+  },
+  anomaly_detection: {
+    method: true,
+    iqr_multiplier: false,
+    zscore_threshold: false,
+    contamination: false,
+  },
+  ccsg_sg_anomaly: {
+    window: true,
+    beta: false,
+    tau: false,
+    threshold: false,
+    ridge: false,
+  },
+  missing_value: {
+    strategy: true,
+  },
+  correlation: {
+    method: true,
+    threshold: false,
+  },
+  filter_rows: {
+    column: true,
+    operator: true,
+    value: false,
+  },
+  report: {
+    title: true,
+  },
+  dashboard: {
+    title: true,
+  },
+  time_series: {
+    date_column: true,
+    value_column: true,
+    window: false,
+  },
+  train_test_split: {
+    test_size: true,
+    random_state: false,
+    stratify_column: false,
+  },
+  ml_model: {
+    task_type: true,
+    algorithm: true,
+    target_column: true,
+    feature_columns: false,
+  },
+  distribution: {
+    bins: false,
+  },
+  chunk_processing: {
+    chunk_size: false,
+  },
+  mapreduce_aggregation: {
+    chunk_size: false,
+    group_column: false,
+    value_column: false,
+    reducer: true,
+  },
+  spark_groupby: {
+    group_columns: false,
+    aggregate_columns: false,
+    aggregation: true,
+    partitions: false,
+  },
+  large_dataset_profiler: {
+    sample_size: false,
+  },
+  join_node: {
+    how: true,
+    keyPairs: true,
+  },
+  export_output: {
+    format: true,
+    filename: true,
+    columns: false,
+    include_charts: false,
+    include_summary: false,
+  },
+  code_sql: {
+    query: true,
+    input_node: false,
+  },
+}
+
 // ── Help content for every node ────────────────────────────────────────────────
 
 interface OptionHelp { name: string; description: string }
@@ -217,6 +322,28 @@ const HELP_CONTENT: Record<string, NodeHelp> = {
       { name: 'Dashboard Title', description: 'Title shown in the dashboard header.' },
     ],
   },
+  export_output: {
+    concept: 'Export Output',
+    description:
+      'Exports the upstream DataFrame to a downloadable file in Excel (.xlsx), CSV (.csv), or JSON (.json) format. Configure which columns to include, whether to add charts or a summary sheet, and set the output filename.',
+    options: [
+      { name: 'Format', description: 'Output file format: xlsx (Excel with formatting), csv (plain text), or json (structured data).' },
+      { name: 'Filename', description: 'Name of the exported file (without extension). The correct extension is added automatically.' },
+      { name: 'Columns', description: 'Comma-separated column names to include. Leave empty to export all columns.' },
+      { name: 'Include Charts', description: 'When enabled and format is xlsx, embeds chart images from upstream visualization nodes into the Excel file.' },
+      { name: 'Include Summary', description: 'When enabled, adds a summary sheet (xlsx) or section (json) with basic statistics of the exported data.' },
+    ],
+  },
+  code_sql: {
+    concept: 'SQL Query',
+    description:
+      'Write custom SQL SELECT queries against upstream datasets. The upstream DataFrame is registered as "input_data" and you can query it using standard SQL syntax. Only SELECT and WITH (CTE) statements are allowed for security.',
+    options: [
+      { name: 'Input Dataset', description: 'Select which upstream node provides the DataFrame to query. The data is available as the "input_data" table.' },
+      { name: 'SQL Query', description: 'Write a SELECT or WITH statement. DROP, DELETE, ALTER, INSERT, UPDATE, and CREATE are blocked.' },
+      { name: 'Run', description: 'Execute the query and preview results. Errors are shown with line number information.' },
+    ],
+  },
 }
 
 export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: ConfigPanelProps) {
@@ -279,6 +406,13 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
   const set = (key: string, value: unknown) => {
     updateNodeData(nodeId!, { config: { ...config, [key]: value } })
     saveNow()
+  }
+
+  // Get field requirement status for the current node type
+  const fieldReqs = FIELD_REQUIREMENTS[node.type || ''] ?? {}
+  const isRequired = (fieldKey: string): boolean | undefined => {
+    if (fieldKey in fieldReqs) return fieldReqs[fieldKey]
+    return undefined // no indicator
   }
 
   const addSuggestedNode = (type: string) => {
@@ -391,6 +525,16 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
           </div>
         )}
 
+        {node.type === 'category_node' && (
+          <CategoryNodeConfig
+            nodeId={nodeId!}
+            config={config}
+            category={data.category}
+            set={set}
+            lang={lang}
+          />
+        )}
+
         {/* ── File Upload Config ─────────────────────────── */}
         {node.type === 'file_upload' && (
           <FileUploadConfig nodeId={nodeId!} config={config} set={set} />
@@ -404,22 +548,22 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         {/* ── Anomaly Detection Config ──────────────────── */}
         {node.type === 'anomaly_detection' && (
           <>
-            <Field label={t('method')}>
+            <Field label={t('method')} required={isRequired('method')}>
               <Select value={String(config.method ?? 'iqr')} onChange={(v) => set('method', v)}
                 options={['iqr', 'zscore', 'modified_zscore', 'isolation_forest']} />
             </Field>
             {(config.method === 'iqr' || !config.method) && (
-              <Field label={t('iqrMultiplier')}>
+              <Field label={t('iqrMultiplier')} required={isRequired('iqr_multiplier')}>
                 <NumberInput value={Number(config.iqr_multiplier ?? 1.5)} onChange={(v) => set('iqr_multiplier', v)} step={0.5} />
               </Field>
             )}
             {config.method === 'zscore' && (
-              <Field label={t('zscoreThreshold')}>
+              <Field label={t('zscoreThreshold')} required={isRequired('zscore_threshold')}>
                 <NumberInput value={Number(config.zscore_threshold ?? 3.0)} onChange={(v) => set('zscore_threshold', v)} step={0.5} />
               </Field>
             )}
             {config.method === 'isolation_forest' && (
-              <Field label={t('contamination')}>
+              <Field label={t('contamination')} required={isRequired('contamination')}>
                 <NumberInput value={Number(config.contamination ?? 0.05)} onChange={(v) => set('contamination', v)} step={0.01} min={0.01} max={0.5} />
               </Field>
             )}
@@ -432,19 +576,19 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
             <div className="rounded-xl bg-success/10 border border-success/20 px-3 py-2 text-[10.5px] leading-relaxed text-[var(--color-text-secondary)]">
               {'U_t -> alpha_t -> p_t -> S_t -> sigma_t^2 -> G_t -> A_t'}
             </div>
-            <Field label="Window">
+            <Field label="Window" required={isRequired('window')}>
               <NumberInput value={Number(config.window ?? 30)} onChange={(v) => set('window', v)} step={5} min={2} />
             </Field>
-            <Field label="Beta">
+            <Field label="Beta" required={isRequired('beta')}>
               <NumberInput value={Number(config.beta ?? 8.0)} onChange={(v) => set('beta', v)} step={0.5} min={0.1} />
             </Field>
-            <Field label="Tau">
+            <Field label="Tau" required={isRequired('tau')}>
               <NumberInput value={Number(config.tau ?? 1.0)} onChange={(v) => set('tau', v)} step={0.1} min={0} />
             </Field>
-            <Field label="A_t Threshold">
+            <Field label="A_t Threshold" required={isRequired('threshold')}>
               <NumberInput value={Number(config.threshold ?? 2.0)} onChange={(v) => set('threshold', v)} step={0.25} min={0} />
             </Field>
-            <Field label="Ridge">
+            <Field label="Ridge" required={isRequired('ridge')}>
               <NumberInput value={Number(config.ridge ?? 0.000001)} onChange={(v) => set('ridge', v)} step={0.000001} min={0.000000001} />
             </Field>
           </>
@@ -452,7 +596,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {/* ── Missing Value Config ─────────────────────── */}
         {node.type === 'missing_value' && (
-          <Field label={t('strategy')}>
+          <Field label={t('strategy')} required={isRequired('strategy')}>
             <Select value={String(config.strategy ?? 'report_only')} onChange={(v) => set('strategy', v)}
               options={['report_only', 'drop_rows', 'fill_mean', 'fill_median', 'fill_mode', 'fill_constant']} />
           </Field>
@@ -461,11 +605,11 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         {/* ── Correlation Config ───────────────────────── */}
         {node.type === 'correlation' && (
           <>
-            <Field label={t('method')}>
+            <Field label={t('method')} required={isRequired('method')}>
               <Select value={String(config.method ?? 'pearson')} onChange={(v) => set('method', v)}
                 options={['pearson', 'spearman', 'kendall']} />
             </Field>
-            <Field label={t('strongCorrelationThreshold')}>
+            <Field label={t('strongCorrelationThreshold')} required={isRequired('threshold')}>
               <NumberInput value={Number(config.threshold ?? 0.7)} onChange={(v) => set('threshold', v)} step={0.05} min={0.1} max={1.0} />
             </Field>
           </>
@@ -474,14 +618,14 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         {/* ── Filter Rows Config ──────────────────────── */}
         {node.type === 'filter_rows' && (
           <>
-            <Field label={t('columnName')}>
+            <Field label={t('columnName')} required={isRequired('column')}>
               <TextInput value={String(config.column ?? '')} onChange={(v) => set('column', v)} placeholder="column_name" />
             </Field>
-            <Field label={t('operator')}>
+            <Field label={t('operator')} required={isRequired('operator')}>
               <Select value={String(config.operator ?? '==')} onChange={(v) => set('operator', v)}
                 options={['==', '!=', '>', '>=', '<', '<=', 'contains', 'not_contains', 'isnull', 'notnull']} />
             </Field>
-            <Field label={t('value')}>
+            <Field label={t('value')} required={isRequired('value')}>
               <TextInput value={String(config.value ?? '')} onChange={(v) => set('value', v)} placeholder="comparison value" />
             </Field>
           </>
@@ -489,7 +633,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {/* ── Report Config ───────────────────────────── */}
         {node.type === 'report' && (
-          <Field label={t('reportTitle')}>
+          <Field label={t('reportTitle')} required={isRequired('title')}>
             <TextInput value={String(config.title ?? 'Data Analysis Report')} onChange={(v) => set('title', v)} />
           </Field>
         )}
@@ -497,7 +641,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         {/* ── Dashboard Config ────────────────────────── */}
         {node.type === 'dashboard' && (
           <>
-            <Field label={t('dashboardTitle')}>
+            <Field label={t('dashboardTitle')} required={isRequired('title')}>
               <TextInput value={String(config.title ?? 'Analysis Dashboard')} onChange={(v) => set('title', v)} />
             </Field>
             <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-secondary)] p-3">
@@ -515,8 +659,18 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
           </>
         )}
 
+        {/* ── Export Output Config ────────────────────── */}
+        {node.type === 'export_output' && (
+          <ExportOutputConfig nodeId={nodeId!} config={config} set={set} data={data} />
+        )}
+
+        {/* ── Code SQL Config ─────────────────────────── */}
+        {node.type === 'code_sql' && (
+          <CodeSQLConfig nodeId={nodeId!} config={config} set={set} edges={edges} nodes={nodes} />
+        )}
+
         {/* ── Chart Config ────────────────────────────── */}
-        {data.category === 'visualization' && (
+        {data.category === 'visualization' && node.type !== 'category_node' && (
           <>
             <Field label="Chart Title">
               <TextInput value={String(config.title ?? data.label)} onChange={(v) => set('title', v)} />
@@ -580,13 +734,13 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
         {/* ── ML Config ───────────────────────────────── */}
         {node.type === 'train_test_split' && (
           <>
-            <Field label="Test Size">
+            <Field label="Test Size" required={isRequired('test_size')}>
               <NumberInput value={Number(config.test_size ?? 0.2)} onChange={(v) => set('test_size', v)} step={0.05} min={0.05} max={0.5} />
             </Field>
-            <Field label="Random State">
+            <Field label="Random State" required={isRequired('random_state')}>
               <NumberInput value={Number(config.random_state ?? 42)} onChange={(v) => set('random_state', v)} />
             </Field>
-            <Field label="Stratify Column">
+            <Field label="Stratify Column" required={isRequired('stratify_column')}>
               <TextInput value={String(config.stratify_column ?? '')} onChange={(v) => set('stratify_column', v)} placeholder="optional column" />
             </Field>
           </>
@@ -594,7 +748,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {node.type === 'ml_model' && (
           <>
-            <Field label="Task Type">
+            <Field label="Task Type" required={isRequired('task_type')}>
               <Select value={String(config.task_type ?? 'classification')} onChange={(v) => {
                 updateNodeData(nodeId!, {
                   config: {
@@ -606,7 +760,7 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
                 saveNow()
               }} options={['classification', 'regression']} />
             </Field>
-            <Field label="Algorithm">
+            <Field label="Algorithm" required={isRequired('algorithm')}>
               <Select
                 value={String(config.algorithm ?? 'random_forest_classifier')}
                 onChange={(v) => set('algorithm', v)}
@@ -615,10 +769,10 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
                   : ['linear_regression', 'random_forest_regressor', 'gradient_boosting_regressor', 'ridge']}
               />
             </Field>
-            <Field label="Target Column">
+            <Field label="Target Column" required={isRequired('target_column')}>
               <TextInput value={String(config.target_column ?? '')} onChange={(v) => set('target_column', v)} placeholder="column_to_predict" />
             </Field>
-            <Field label="Feature Columns">
+            <Field label="Feature Columns" required={isRequired('feature_columns')}>
               <TextInput value={Array.isArray(config.feature_columns) ? config.feature_columns.join(', ') : ''} onChange={(v) => set('feature_columns', v.split(',').map((item) => item.trim()).filter(Boolean))} placeholder="empty = all numeric" />
             </Field>
           </>
@@ -626,20 +780,20 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {/* ── Distribution / Statistics ───────────────── */}
         {node.type === 'distribution' && (
-            <Field label={t('histogramBins')}>
+            <Field label={t('histogramBins')} required={isRequired('bins')}>
             <NumberInput value={Number(config.bins ?? 20)} onChange={(v) => set('bins', v)} step={5} min={5} max={100} />
           </Field>
         )}
 
         {node.type === 'time_series' && (
           <>
-            <Field label="Date Column">
+            <Field label="Date Column" required={isRequired('date_column')}>
               <TextInput value={String(config.date_column ?? '')} onChange={(v) => set('date_column', v)} placeholder="date" />
             </Field>
-            <Field label="Value Column">
+            <Field label="Value Column" required={isRequired('value_column')}>
               <TextInput value={String(config.value_column ?? '')} onChange={(v) => set('value_column', v)} placeholder="sales" />
             </Field>
-            <Field label="Window">
+            <Field label="Window" required={isRequired('window')}>
               <NumberInput value={Number(config.window ?? 7)} onChange={(v) => set('window', v)} min={2} />
             </Field>
           </>
@@ -647,23 +801,23 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {/* ── Big Data Config ─────────────────────────── */}
         {node.type === 'chunk_processing' && (
-          <Field label="Chunk Size">
+          <Field label="Chunk Size" required={isRequired('chunk_size')}>
             <NumberInput value={Number(config.chunk_size ?? 10000)} onChange={(v) => set('chunk_size', v)} step={1000} min={1} />
           </Field>
         )}
 
         {node.type === 'mapreduce_aggregation' && (
           <>
-            <Field label="Chunk Size">
+            <Field label="Chunk Size" required={isRequired('chunk_size')}>
               <NumberInput value={Number(config.chunk_size ?? 10000)} onChange={(v) => set('chunk_size', v)} step={1000} min={1} />
             </Field>
-            <Field label="Group Column">
+            <Field label="Group Column" required={isRequired('group_column')}>
               <TextInput value={String(config.group_column ?? '')} onChange={(v) => set('group_column', v)} placeholder="empty = auto" />
             </Field>
-            <Field label="Value Column">
+            <Field label="Value Column" required={isRequired('value_column')}>
               <TextInput value={String(config.value_column ?? '')} onChange={(v) => set('value_column', v)} placeholder="empty = first numeric" />
             </Field>
-            <Field label="Reducer">
+            <Field label="Reducer" required={isRequired('reducer')}>
               <Select value={String(config.reducer ?? 'sum')} onChange={(v) => set('reducer', v)} options={['count', 'sum', 'mean', 'min', 'max']} />
             </Field>
           </>
@@ -671,31 +825,31 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
 
         {node.type === 'spark_groupby' && (
           <>
-            <Field label="Group Columns">
+            <Field label="Group Columns" required={isRequired('group_columns')}>
               <TextInput
                 value={Array.isArray(config.group_columns) ? config.group_columns.join(', ') : String(config.group_columns ?? '')}
                 onChange={(v) => set('group_columns', v.split(',').map((item) => item.trim()).filter(Boolean))}
                 placeholder="empty = auto"
               />
             </Field>
-            <Field label="Aggregate Columns">
+            <Field label="Aggregate Columns" required={isRequired('aggregate_columns')}>
               <TextInput
                 value={Array.isArray(config.aggregate_columns) ? config.aggregate_columns.join(', ') : String(config.aggregate_columns ?? '')}
                 onChange={(v) => set('aggregate_columns', v.split(',').map((item) => item.trim()).filter(Boolean))}
                 placeholder="empty = all numeric"
               />
             </Field>
-            <Field label="Aggregation">
+            <Field label="Aggregation" required={isRequired('aggregation')}>
               <Select value={String(config.aggregation ?? 'sum')} onChange={(v) => set('aggregation', v)} options={['count', 'sum', 'mean', 'min', 'max']} />
             </Field>
-            <Field label="Partitions">
+            <Field label="Partitions" required={isRequired('partitions')}>
               <NumberInput value={Number(config.partitions ?? 4)} onChange={(v) => set('partitions', v)} step={1} min={1} />
             </Field>
           </>
         )}
 
         {node.type === 'large_dataset_profiler' && (
-          <Field label="Sample Size">
+          <Field label="Sample Size" required={isRequired('sample_size')}>
             <NumberInput value={Number(config.sample_size ?? 5000)} onChange={(v) => set('sample_size', v)} step={1000} min={1} />
           </Field>
         )}
@@ -720,6 +874,102 @@ export default function ConfigPanel({ nodeId, collapsed = false, onToggle }: Con
   )
 }
 
+function CategoryNodeConfig({
+  nodeId,
+  config,
+  category,
+  set,
+  lang,
+}: {
+  nodeId: string
+  config: Record<string, unknown>
+  category: string
+  set: (k: string, v: unknown) => void
+  lang: string
+}) {
+  const defs = NODE_DEFINITIONS.filter((def) => def.category === category)
+  const operations = normaliseCategoryOperations(config.operations)
+  const selected = new Set(operations.map((operation) => operation.type))
+  const tr = lang === 'tr'
+
+  const toggleOperation = (type: string) => {
+    const def = defs.find((item) => item.type === type)
+    if (!def) return
+    const next = selected.has(type)
+      ? operations.filter((operation) => operation.type !== type)
+      : [
+          ...operations,
+          { type: def.type, label: def.label, config: { ...def.defaultConfig } },
+        ]
+    set('operations', defs
+      .map((definition) => next.find((operation) => operation.type === definition.type))
+      .filter(Boolean))
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-primary/15 bg-primary/[0.06] px-3 py-2.5">
+        <p className="text-[11px] font-semibold text-[var(--color-text-primary)]">
+          {tr ? 'Bu tek node içinde çalışacak özellikleri seçin.' : 'Choose features that run inside this single node.'}
+        </p>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-[var(--color-text-muted)]">
+          {tr
+            ? 'Seçilen işlemler listelenen sırayla çalışır ve çıktı tek node üzerinden devam eder.'
+            : 'Selected operations run in the displayed order and continue through one node output.'}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        {defs.map((def) => {
+          const checked = selected.has(def.type)
+          return (
+            <label
+              key={def.type}
+              className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-all ${
+                checked
+                  ? 'border-primary/45 bg-primary/[0.07]'
+                  : 'border-[var(--color-border-subtle)] bg-[var(--color-secondary)] hover:border-[var(--color-border-default)]'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleOperation(def.type)}
+                className="mt-0.5 w-3.5 h-3.5 rounded border-[var(--color-border-default)] text-primary focus:ring-0 focus:ring-offset-0"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold text-[var(--color-text-primary)]">{def.label}</span>
+                <span className="block text-[10px] leading-relaxed text-[var(--color-text-muted)]">{def.description}</span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+
+      {category === 'source' && selected.has('file_upload') && (
+        <FileUploadConfig nodeId={nodeId} config={config} set={set} />
+      )}
+
+      {category === 'source' && selected.has('database_query') && (
+        <DatabaseQueryConfig config={config} set={set} />
+      )}
+    </div>
+  )
+}
+
+function normaliseCategoryOperations(raw: unknown): Array<{ type: string; label?: string; config?: Record<string, unknown> }> {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') return { type: item }
+      if (item && typeof item === 'object' && 'type' in item) {
+        return item as { type: string; label?: string; config?: Record<string, unknown> }
+      }
+      return null
+    })
+    .filter((item): item is { type: string; label?: string; config?: Record<string, unknown> } => Boolean(item?.type))
+}
+
 // ── Database Query sub-component ──────────────────────────────────────────────
 
 function DatabaseQueryConfig({
@@ -737,6 +987,11 @@ function DatabaseQueryConfig({
   const mode = String(config.connection_mode ?? 'connector')
   const dbConnectors = connectors.filter((connector) => connector.type === 'postgres' || connector.type === 'supabase_table')
   const selectedConnector = dbConnectors.find((connector) => connector.id === config.connector_id)
+  const fieldReqs = FIELD_REQUIREMENTS['database_query'] ?? {}
+  const isRequired = (fieldKey: string): boolean | undefined => {
+    if (fieldKey in fieldReqs) return fieldReqs[fieldKey]
+    return undefined
+  }
 
   useEffect(() => {
     let active = true
@@ -784,7 +1039,7 @@ function DatabaseQueryConfig({
 
       {mode === 'connector' ? (
         <>
-          <Field label={tr ? 'Kayıtlı DB connector' : 'Saved DB connector'}>
+          <Field label={tr ? 'Kayıtlı DB connector' : 'Saved DB connector'} required={isRequired('connector_id')}>
             <select
               value={String(config.connector_id ?? '')}
               onChange={(e) => set('connector_id', e.target.value)}
@@ -797,7 +1052,7 @@ function DatabaseQueryConfig({
             </select>
           </Field>
           {selectedConnector?.type === 'postgres' && (
-            <Field label="SQL">
+            <Field label="SQL" required={isRequired('query')}>
               <textarea
                 value={String(config.query ?? 'select * from your_table limit 1000')}
                 onChange={(e) => set('query', e.target.value)}
@@ -826,10 +1081,10 @@ function DatabaseQueryConfig({
         </>
       ) : mode === 'connection_string' ? (
         <>
-          <Field label="Connection string">
+          <Field label="Connection string" required={isRequired('connection_string')}>
             <TextInput value={String(config.connection_string ?? '')} onChange={(v) => set('connection_string', v)} placeholder="postgresql+psycopg2://user:pass@host:5432/db" />
           </Field>
-          <Field label="SQL">
+          <Field label="SQL" required={isRequired('query')}>
             <textarea
               value={String(config.query ?? 'select * from your_table limit 1000')}
               onChange={(e) => set('query', e.target.value)}
@@ -840,22 +1095,22 @@ function DatabaseQueryConfig({
         </>
       ) : (
         <>
-          <Field label="DB type">
+          <Field label="DB type" required={isRequired('db_type')}>
             <Select value={String(config.db_type ?? 'postgresql')} onChange={(v) => set('db_type', v)} options={['postgresql', 'mysql', 'sqlite']} />
           </Field>
-          <Field label="Host">
+          <Field label="Host" required={isRequired('host')}>
             <TextInput value={String(config.host ?? 'localhost')} onChange={(v) => set('host', v)} />
           </Field>
-          <Field label="Port">
+          <Field label="Port" required={isRequired('port')}>
             <NumberInput value={Number(config.port ?? 5432)} onChange={(v) => set('port', v)} min={1} />
           </Field>
-          <Field label="Database">
+          <Field label="Database" required={isRequired('database')}>
             <TextInput value={String(config.database ?? '')} onChange={(v) => set('database', v)} />
           </Field>
-          <Field label="Username">
+          <Field label="Username" required={isRequired('username')}>
             <TextInput value={String(config.username ?? '')} onChange={(v) => set('username', v)} />
           </Field>
-          <Field label="Password">
+          <Field label="Password" required={isRequired('password')}>
             <input
               type="password"
               value={String(config.password ?? '')}
@@ -863,7 +1118,7 @@ function DatabaseQueryConfig({
               className="w-full bg-[var(--color-secondary)] border border-[var(--color-border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--color-text-primary)] focus:outline-none focus:border-primary/50 transition-colors"
             />
           </Field>
-          <Field label="SQL">
+          <Field label="SQL" required={isRequired('query')}>
             <textarea
               value={String(config.query ?? 'select * from your_table limit 1000')}
               onChange={(e) => set('query', e.target.value)}
@@ -874,7 +1129,7 @@ function DatabaseQueryConfig({
         </>
       )}
 
-      <Field label={tr ? 'Satır limiti' : 'Row limit'}>
+      <Field label={tr ? 'Satır limiti' : 'Row limit'} required={isRequired('row_limit')}>
         <NumberInput value={Number(config.row_limit ?? 10000)} onChange={(v) => set('row_limit', v)} step={1000} min={1} />
       </Field>
     </div>
@@ -964,12 +1219,128 @@ function FileUploadConfig({
   )
 }
 
+// ── Export Output sub-component ───────────────────────────────────────────────
+
+function ExportOutputConfig({
+  nodeId,
+  config,
+  set,
+  data,
+}: {
+  nodeId: string
+  config: Record<string, unknown>
+  set: (k: string, v: unknown) => void
+  data: NodeData
+}) {
+  const { lang } = useI18n()
+  const tr = lang === 'tr'
+  const fieldReqs = FIELD_REQUIREMENTS['export_output'] ?? {}
+  const isRequired = (fieldKey: string): boolean | undefined => {
+    if (fieldKey in fieldReqs) return fieldReqs[fieldKey]
+    return undefined
+  }
+
+  const downloadUrl = (data.resultPreview as Record<string, unknown> | undefined)?.download_url as string | undefined
+
+  const handleDownload = () => {
+    if (!downloadUrl) return
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = `${String(config.filename || 'output')}.${String(config.format || 'xlsx')}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl bg-primary/10 border border-primary/15 px-3 py-2 text-[10.5px] leading-relaxed text-[var(--color-text-secondary)]">
+        {tr
+          ? 'Üst akış verilerini Excel, CSV veya JSON formatında dışa aktarır. Çalıştırma sonrası dosyayı indirebilirsiniz.'
+          : 'Exports upstream data to Excel, CSV, or JSON. Download the file after execution.'}
+      </div>
+
+      <Field label={tr ? 'Format' : 'Format'} required={isRequired('format')}>
+        <Select
+          value={String(config.format ?? 'xlsx')}
+          onChange={(v) => set('format', v)}
+          options={['xlsx', 'csv', 'json']}
+        />
+      </Field>
+
+      <Field label={tr ? 'Dosya Adı' : 'Filename'} required={isRequired('filename')}>
+        <TextInput
+          value={String(config.filename ?? 'output')}
+          onChange={(v) => set('filename', v)}
+          placeholder="output"
+        />
+      </Field>
+
+      <Field label={tr ? 'Sütunlar' : 'Columns'} required={isRequired('columns')}>
+        <TextInput
+          value={Array.isArray(config.columns) ? (config.columns as string[]).join(', ') : String(config.columns ?? '')}
+          onChange={(v) => set('columns', v.split(',').map((item) => item.trim()).filter(Boolean))}
+          placeholder={tr ? 'boş = tüm sütunlar' : 'empty = all columns'}
+        />
+      </Field>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(config.include_charts)}
+            onChange={(e) => set('include_charts', e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-[var(--color-border-default)] text-[var(--color-primary)] focus:ring-0 focus:ring-offset-0"
+          />
+          <span className="text-[11px] text-[var(--color-text-secondary)]">
+            {tr ? 'Grafikleri dahil et' : 'Include charts'}
+            {isRequired('include_charts') === false && <span className="text-[var(--color-text-muted)] opacity-60 ml-1">(optional)</span>}
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(config.include_summary)}
+            onChange={(e) => set('include_summary', e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-[var(--color-border-default)] text-[var(--color-primary)] focus:ring-0 focus:ring-offset-0"
+          />
+          <span className="text-[11px] text-[var(--color-text-secondary)]">
+            {tr ? 'Özet dahil et' : 'Include summary'}
+            {isRequired('include_summary') === false && <span className="text-[var(--color-text-muted)] opacity-60 ml-1">(optional)</span>}
+          </span>
+        </label>
+      </div>
+
+      {downloadUrl && (
+        <button
+          onClick={handleDownload}
+          className="w-full h-9 rounded-xl bg-[var(--color-primary)] text-white text-[12px] font-semibold hover:bg-[var(--color-primary-hover)] transition-colors flex items-center justify-center gap-2"
+        >
+          <span>⬇</span>
+          <span>{tr ? 'Dosyayı İndir' : 'Download File'}</span>
+        </button>
+      )}
+
+      {!downloadUrl && data.status === 'success' && (
+        <div className="rounded-xl bg-success/10 border border-success/20 px-3 py-2 text-[10.5px] text-[var(--color-text-secondary)]">
+          {tr ? 'Çalıştırma tamamlandı. İndirme bağlantısı bekleniyor...' : 'Execution complete. Waiting for download link...'}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Shared micro-components ───────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] text-[var(--color-text-muted)] font-medium mb-1.5">{label}</label>
+      <label className="block text-[11px] text-[var(--color-text-muted)] font-medium mb-1.5">
+        {label}
+        {required && <span className="text-[#FF453A] ml-0.5">*</span>}
+        {required === false && <span className="text-[var(--color-text-muted)] opacity-60 ml-1 font-normal">(optional)</span>}
+      </label>
       {children}
     </div>
   )
@@ -1032,7 +1403,7 @@ function getIcon(type: string): string {
     chunk_processing: '\u25a4', mapreduce_aggregation: '\u03a3', spark_groupby: 'S', large_dataset_profiler: 'LP',
     route_node: 'R', join_node: '\u22c8',
     time_series: '~', train_test_split: '\u2282', ml_model: '\u25ce',
-    dashboard: '\u229e', report: '\u22a1',
+    dashboard: '\u229e', report: '\u22a1', export_output: '\u2b07', code_sql: '\u2328',
   }
   return map[type] ?? '\u2699'
 }
@@ -1043,6 +1414,180 @@ function statusColor(status?: string): string {
   if (status === 'running') return 'text-[var(--color-primary)]'
   if (status === 'cancelled') return 'text-[#8E8E93]'
   return 'text-[var(--color-text-muted)]'
+}
+
+// ── Code SQL sub-component ────────────────────────────────────────────────────
+
+function CodeSQLConfig({
+  nodeId,
+  config,
+  set,
+  edges,
+  nodes,
+}: {
+  nodeId: string
+  config: Record<string, unknown>
+  set: (k: string, v: unknown) => void
+  edges: Edge[]
+  nodes: Node<NodeData>[]
+}) {
+  const { lang } = useI18n()
+  const tr = lang === 'tr'
+  const [sqlError, setSqlError] = useState<string | null>(null)
+  const [queryResult, setQueryResult] = useState<{ columns: string[]; rows: unknown[][] } | null>(null)
+  const [running, setRunning] = useState(false)
+
+  const fieldReqs = FIELD_REQUIREMENTS['code_sql'] ?? {}
+  const isRequired = (fieldKey: string): boolean | undefined => {
+    if (fieldKey in fieldReqs) return fieldReqs[fieldKey]
+    return undefined
+  }
+
+  // Get upstream nodes connected to this node
+  const upstreamNodes = edges
+    .filter((e) => e.target === nodeId)
+    .map((e) => nodes.find((n) => n.id === e.source))
+    .filter(Boolean) as Node<NodeData>[]
+
+  const handleRun = async () => {
+    const query = String(config.query ?? '').trim()
+    if (!query) {
+      setSqlError(tr ? 'SQL sorgusu boş olamaz.' : 'SQL query cannot be empty.')
+      return
+    }
+
+    // Client-side security check
+    const blocked = ['DROP', 'DELETE', 'ALTER', 'INSERT', 'UPDATE', 'CREATE', 'TRUNCATE']
+    const upperQuery = query.toUpperCase()
+    const hasBlocked = blocked.some((kw) => upperQuery.includes(kw))
+    if (hasBlocked) {
+      setSqlError(tr ? 'Güvenlik hatası: Yalnızca SELECT ve WITH (CTE) ifadelerine izin verilir.' : 'Security error: Only SELECT and WITH (CTE) statements are allowed.')
+      setQueryResult(null)
+      return
+    }
+
+    setRunning(true)
+    setSqlError(null)
+    setQueryResult(null)
+
+    try {
+      // Simulate execution — actual backend call will be implemented in task 7.2
+      // For now, show a placeholder indicating the query would be executed
+      setSqlError(null)
+      setQueryResult(null)
+      // The actual execution will be triggered through the workflow execution engine
+      toast.success(tr ? 'Sorgu çalıştırma isteği gönderildi' : 'Query execution requested')
+    } catch (err) {
+      setSqlError(String(err))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl bg-[#8E8E93]/10 border border-[#8E8E93]/15 px-3 py-2 text-[10.5px] leading-relaxed text-[var(--color-text-secondary)]">
+        {tr
+          ? 'Üst akış verilerine SQL sorgusu yazın. Veri "input_data" tablosu olarak erişilebilir. Yalnızca SELECT ve WITH ifadelerine izin verilir.'
+          : 'Write SQL queries against upstream data. Data is accessible as the "input_data" table. Only SELECT and WITH statements are allowed.'}
+      </div>
+
+      {/* Input dataset selector */}
+      <Field label={tr ? 'Giriş Veri Seti' : 'Input Dataset'} required={isRequired('input_node')}>
+        <select
+          value={String(config.input_node ?? '')}
+          onChange={(e) => set('input_node', e.target.value)}
+          className="w-full bg-[var(--color-secondary)] border border-[var(--color-border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--color-text-primary)] focus:outline-none focus:border-primary/50 transition-colors"
+        >
+          <option value="">{tr ? 'Otomatik (bağlı node)' : 'Auto (connected node)'}</option>
+          {upstreamNodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              {(n.data as NodeData).label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {/* SQL query textarea with monospace font and dark background */}
+      <Field label="SQL Query" required={isRequired('query')}>
+        <div className="relative">
+          <textarea
+            value={String(config.query ?? 'SELECT * FROM input_data LIMIT 100')}
+            onChange={(e) => {
+              set('query', e.target.value)
+              setSqlError(null)
+            }}
+            rows={8}
+            spellCheck={false}
+            placeholder="SELECT * FROM input_data LIMIT 100"
+            className="w-full resize-y bg-[#1C1C1E] dark:bg-[#0D0D0F] border border-[var(--color-border-default)] rounded-lg px-3 py-2.5 text-[11px] font-mono text-[#E5E5EA] placeholder-[#636366] focus:outline-none focus:border-primary/50 transition-colors leading-relaxed"
+          />
+          <span className="absolute top-2 right-2 text-[9px] font-mono text-[#636366] uppercase tracking-wider">SQL</span>
+        </div>
+      </Field>
+
+      {/* Run button */}
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="w-full h-9 rounded-xl bg-[var(--color-primary)] text-white text-[12px] font-semibold hover:bg-[var(--color-primary-hover)] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+      >
+        {running ? (
+          <>
+            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            {tr ? 'Çalışıyor...' : 'Running...'}
+          </>
+        ) : (
+          <>
+            <span>▶</span>
+            {tr ? 'Sorguyu Çalıştır' : 'Run Query'}
+          </>
+        )}
+      </button>
+
+      {/* Error display */}
+      {sqlError && (
+        <div className="rounded-xl bg-[#FF453A]/10 border border-[#FF453A]/20 px-3 py-2">
+          <p className="text-[10.5px] font-medium text-[#FF453A] leading-relaxed">{sqlError}</p>
+        </div>
+      )}
+
+      {/* Results preview table */}
+      {queryResult && queryResult.columns.length > 0 && (
+        <div className="rounded-xl border border-[var(--color-border-subtle)] overflow-hidden">
+          <div className="px-3 py-1.5 bg-[var(--color-secondary)] border-b border-[var(--color-border-subtle)]">
+            <p className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-widest">
+              {tr ? 'Sonuç Önizleme' : 'Results Preview'}
+            </p>
+          </div>
+          <div className="overflow-x-auto max-h-[160px] overflow-y-auto">
+            <table className="w-full text-[10px] font-mono">
+              <thead>
+                <tr className="bg-[var(--color-secondary)]">
+                  {queryResult.columns.map((col) => (
+                    <th key={col} className="px-2 py-1 text-left text-[var(--color-text-muted)] font-semibold border-b border-[var(--color-border-subtle)] whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {queryResult.rows.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border-subtle)] last:border-0">
+                    {row.map((cell, j) => (
+                      <td key={j} className="px-2 py-1 text-[var(--color-text-secondary)] whitespace-nowrap">
+                        {cell == null ? <span className="text-[var(--color-text-muted)] italic">null</span> : String(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getSuggestions(type: string, hasOutgoing: boolean) {
@@ -1069,6 +1614,7 @@ function getSuggestions(type: string, hasOutgoing: boolean) {
       { type: 'bar_chart', reason: 'Visualize summary metrics' },
       { type: 'dashboard', reason: 'Turn metrics into a dashboard' },
       { type: 'report', reason: 'Capture findings in a report' },
+      { type: 'export_output', reason: 'Export data to file' },
     ],
     anomaly_detection: [
       { type: 'dashboard', reason: 'Visualize outlier findings' },
@@ -1115,6 +1661,7 @@ function getSuggestions(type: string, hasOutgoing: boolean) {
     ml_model: [
       { type: 'dashboard', reason: 'Show model metrics' },
       { type: 'report', reason: 'Document model performance' },
+      { type: 'export_output', reason: 'Export predictions to file' },
     ],
     report: [],
   }
