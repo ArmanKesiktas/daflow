@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { executionsApi } from '../api/executions'
 import { useExecutionStore } from '../store/executionStore'
 import type { ExecutionCompare, ExecutionStatus } from '../types/workflow'
+import LoadingState from './ui/LoadingState'
 
 interface Props {
   workflowId: string | null
@@ -113,10 +114,7 @@ export default function HistoryModal({ workflowId, onClose }: Props) {
             </div>
           )}
           {loading ? (
-            <div className="flex items-center justify-center py-12 gap-2 text-[var(--color-text-muted)] text-[13px]">
-              <span className="w-4 h-4 border-2 border-[var(--color-border-default)] border-t-[var(--color-text-secondary)] rounded-full animate-spin" />
-              Loading…
-            </div>
+            <LoadingState variant="list" rows={4} message="Loading execution history..." />
           ) : executions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
               <span className="text-3xl opacity-10">⏱</span>

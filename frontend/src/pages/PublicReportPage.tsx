@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { publishApi } from '../api/platform'
 import BrandLogo from '../components/BrandLogo'
+import LoadingState from '../components/ui/LoadingState'
 
 export default function PublicReportPage() {
   const { token } = useParams()
@@ -14,7 +15,7 @@ export default function PublicReportPage() {
   }, [token])
 
   if (error) return <div className="min-h-screen flex items-center justify-center text-[#FF453A]">{error}</div>
-  if (!data) return <div className="min-h-screen flex items-center justify-center"><span className="w-7 h-7 rounded-full border-2 border-[#0071E3]/20 border-t-[#0071E3] animate-spin" /></div>
+  if (!data) return <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#111113] px-6 py-10"><LoadingState variant="list" rows={6} message="Loading report..." /></div>
 
   const report = data.report || {}
   return (

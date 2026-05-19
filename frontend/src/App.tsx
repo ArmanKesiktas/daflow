@@ -25,6 +25,7 @@ import SettingsPage from './pages/SettingsPage'
 import MarketingInfoPage from './pages/MarketingInfoPage'
 import { useWorkspace } from './features/workspaces/WorkspaceContext'
 import WorkspaceShell from './features/workspaces/components/WorkspaceShell'
+import LoadingState from './components/ui/LoadingState'
 
 // Lazy-loaded heavy pages for code splitting
 const WorkflowEditorPage = lazy(() => import('./pages/WorkflowEditorPage'))
@@ -49,7 +50,7 @@ export default function App() {
   }, [navigate])
 
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><span className="w-6 h-6 border-2 border-[var(--color-border-default)] border-t-[#0071E3] rounded-full animate-spin" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[var(--color-bg-primary)] px-6 py-10"><LoadingState variant="grid" rows={6} message="Loading..." /></div>}>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/pricing" element={<PricingPage />} />

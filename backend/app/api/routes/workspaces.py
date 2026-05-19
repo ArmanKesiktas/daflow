@@ -47,6 +47,7 @@ async def create_workspace(payload: dict, user: dict = Depends(get_current_user)
         "updated_at": now_iso(),
     }
     try:
+        _ensure_workspace_name_available(supabase, user["id"], name)
         supabase.table("workspaces").insert(workspace).execute()
         supabase.table("workspace_members").insert({
             "id": str(uuid.uuid4()),
@@ -57,6 +58,8 @@ async def create_workspace(payload: dict, user: dict = Depends(get_current_user)
             "joined_at": now_iso(),
             "created_at": now_iso(),
         }).execute()
+    except HTTPException:
+        raise
     except Exception as exc:
         message = str(exc)
         if "workspaces" in message or "workspace_members" in message or "Could not find" in message:
@@ -100,7 +103,15 @@ async def get_workspace(workspace_id: str, user: dict = Depends(get_current_user
 @router.patch("/workspaces/{workspace_id}")
 async def update_workspace(workspace_id: str, payload: dict, user: dict = Depends(get_current_user), supabase=Depends(get_supabase)):
     require_workspace_role(supabase, user, workspace_id, ADMIN_ROLES)
+    workspace = supabase.table("workspaces").select("id, owner_id").eq("id", workspace_id).single().execute().data
+    if not workspace:
+        raise HTTPException(404, "Workspace not found")
     patch = {k: v for k, v in payload.items() if k in {"name", "slug", "description", "avatar_url"}}
+    if "name" in patch:
+        patch["name"] = str(patch["name"] or "").strip()
+        if not patch["name"]:
+            raise HTTPException(400, "Workspace name is required")
+        _ensure_workspace_name_available(supabase, workspace.get("owner_id") or user["id"], patch["name"], exclude_id=workspace_id)
     patch["updated_at"] = now_iso()
     result = supabase.table("workspaces").update(patch).eq("id", workspace_id).execute()
     log_activity(supabase, workspace_id, user["id"], "workspace.updated", "workspace", workspace_id, patch)
@@ -276,6 +287,7 @@ async def create_project(workspace_id: str, payload: dict, user: dict = Depends(
     name = str(payload.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "Project name is required")
+    _ensure_project_name_available(supabase, workspace_id, name)
     row = {
         "id": str(uuid.uuid4()),
         "workspace_id": workspace_id,
@@ -295,6 +307,11 @@ async def update_project(project_id: str, payload: dict, user: dict = Depends(ge
     project = _get_project(supabase, project_id)
     require_workspace_role(supabase, user, project["workspace_id"], WRITE_ROLES)
     patch = {k: v for k, v in payload.items() if k in {"name", "description"}}
+    if "name" in patch:
+        patch["name"] = str(patch["name"] or "").strip()
+        if not patch["name"]:
+            raise HTTPException(400, "Project name is required")
+        _ensure_project_name_available(supabase, project["workspace_id"], patch["name"], exclude_id=project_id)
     patch["updated_at"] = now_iso()
     result = supabase.table("workspace_projects").update(patch).eq("id", project_id).execute()
     log_activity(supabase, project["workspace_id"], user["id"], "project.updated", "project", project_id, patch)
@@ -450,6 +467,30 @@ def _get_project(supabase, project_id: str) -> dict:
     if not project:
         raise HTTPException(404, "Project not found")
     return project
+
+
+def _normalize_name(value: Any) -> str:
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def _has_matching_name(rows: list[dict], name: str, exclude_id: str | None = None) -> bool:
+    normalized = _normalize_name(name)
+    return any(
+        _normalize_name(row.get("name")) == normalized and str(row.get("id")) != str(exclude_id)
+        for row in rows
+    )
+
+
+def _ensure_workspace_name_available(supabase, owner_id: str, name: str, exclude_id: str | None = None) -> None:
+    rows = supabase.table("workspaces").select("id, name").eq("owner_id", owner_id).execute().data or []
+    if _has_matching_name(rows, name, exclude_id):
+        raise HTTPException(409, "A workspace with this name already exists.")
+
+
+def _ensure_project_name_available(supabase, workspace_id: str, name: str, exclude_id: str | None = None) -> None:
+    rows = supabase.table("workspace_projects").select("id, name").eq("workspace_id", workspace_id).execute().data or []
+    if _has_matching_name(rows, name, exclude_id):
+        raise HTTPException(409, "A project with this name already exists in this workspace.")
 
 
 def _slugify(value: str) -> str:

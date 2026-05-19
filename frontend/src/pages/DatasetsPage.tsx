@@ -320,7 +320,7 @@ export default function DatasetsPage() {
       </div>
 
       {loading ? (
-        <LoadingState message={tr ? 'Yükleniyor...' : 'Loading datasets...'} />
+        <LoadingState variant="list" rows={6} message={tr ? 'Veri setleri yükleniyor...' : 'Loading datasets...'} />
       ) : error ? (
         <ErrorState
           title={tr ? 'Yükleme hatası' : 'Failed to load'}

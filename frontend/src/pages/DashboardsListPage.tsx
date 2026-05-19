@@ -123,7 +123,7 @@ export default function DashboardsListPage() {
         )}
 
         {loading ? (
-          <LoadingState message={lang === 'tr' ? 'Yükleniyor...' : 'Loading...'} />
+          <LoadingState variant="grid" rows={6} message={lang === 'tr' ? 'Dashboardlar yükleniyor...' : 'Loading dashboards...'} />
         ) : error ? (
           <ErrorState
             title={lang === 'tr' ? 'Yükleme başarısız' : 'Failed to load'}

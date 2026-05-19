@@ -24,6 +24,16 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 const STORAGE_KEY = 'daflow.activeWorkspaceId'
 const PROJECT_STORAGE_KEY = 'daflow.activeProjectByWorkspace'
 
+function normalizeName(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data?.detail
+  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message
+  return typeof detail === 'string' ? detail : typeof message === 'string' ? message : fallback
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -104,8 +114,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const createWorkspace = useCallback(async (name: string, description?: string) => {
+    const trimmedName = name.trim()
+    if (!trimmedName) return null
+    if (workspaces.some((workspace) => normalizeName(workspace.name) === normalizeName(trimmedName))) {
+      toast.error('Bu isimde bir workspace zaten var')
+      return null
+    }
     try {
-      const workspace = await workspacesApi.create({ name, description })
+      const workspace = await workspacesApi.create({ name: trimmedName, description })
       if (workspace.storage_ready === false) {
         setWorkspaces([workspace])
         setActiveWorkspaceId(workspace.id)
@@ -115,11 +131,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaces((items) => [workspace, ...items])
       setActiveWorkspaceId(workspace.id)
       return workspace
-    } catch {
-      toast.error('Workspace oluşturulamadı')
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Workspace oluşturulamadı'))
       return null
     }
-  }, [setActiveWorkspaceId])
+  }, [setActiveWorkspaceId, workspaces])
 
   const activeWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0] ?? null,

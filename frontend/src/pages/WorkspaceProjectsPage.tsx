@@ -9,6 +9,16 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { useI18n } from '../i18n'
 
+function normalizeName(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data?.detail
+  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message
+  return typeof detail === 'string' ? detail : typeof message === 'string' ? message : fallback
+}
+
 export default function WorkspaceProjectsPage() {
   const { workspaceId } = useParams()
   const navigate = useNavigate()
@@ -44,15 +54,20 @@ export default function WorkspaceProjectsPage() {
 
   const create = async () => {
     if (!workspaceId || !name.trim()) return
+    const trimmedName = name.trim()
+    if (projects.some((project) => normalizeName(project.name) === normalizeName(trimmedName))) {
+      toast.error(tr ? 'Bu workspace içinde aynı isimde bir proje zaten var' : 'A project with this name already exists in this workspace')
+      return
+    }
     try {
-      const project = await workspacesApi.createProject(workspaceId, { name: name.trim() })
+      const project = await workspacesApi.createProject(workspaceId, { name: trimmedName })
       setProjects((items) => [project, ...items])
       upsertProject(project)
       setActiveProjectId(project.id, workspaceId)
       setName('')
       toast.success('Proje oluşturuldu')
-    } catch {
-      toast.error('Operation failed')
+    } catch (error) {
+      toast.error(apiErrorMessage(error, tr ? 'Proje oluşturulamadı' : 'Project could not be created'))
     }
   }
 
@@ -87,7 +102,7 @@ export default function WorkspaceProjectsPage() {
 
       {/* Content area with loading/error/empty/list states */}
       {loading ? (
-        <LoadingState message="Projeler yükleniyor..." />
+        <LoadingState variant="grid" rows={6} message={tr ? 'Projeler yükleniyor...' : 'Loading projects...'} />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : projects.length === 0 ? (

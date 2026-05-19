@@ -4,6 +4,7 @@ import { publishApi } from '../api/platform'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import '../components/charts/chartSetup'
 import BrandLogo from '../components/BrandLogo'
+import LoadingState from '../components/ui/LoadingState'
 
 export default function PublicDashboardPage() {
   const { token } = useParams()
@@ -140,7 +141,7 @@ function PublicMapSketch({ panel }: { panel: any }) {
 }
 
 function PublicLoading() {
-  return <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-[#111113]"><span className="w-7 h-7 rounded-full border-2 border-[#0071E3]/20 border-t-[#0071E3] animate-spin" /></div>
+  return <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#111113] px-6 py-10"><LoadingState variant="grid" rows={6} message="Loading dashboard..." /></div>
 }
 
 function PublicError({ message }: { message: string }) {

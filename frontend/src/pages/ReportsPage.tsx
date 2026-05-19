@@ -190,7 +190,7 @@ export default function ReportsPage() {
         )}
 
         {loading ? (
-          <LoadingState message={lang === 'tr' ? 'Raporlar yükleniyor...' : 'Loading reports...'} />
+          <LoadingState variant="list" rows={6} message={lang === 'tr' ? 'Raporlar yükleniyor...' : 'Loading reports...'} />
         ) : reports.length === 0 ? (
           <EmptyState
             icon={

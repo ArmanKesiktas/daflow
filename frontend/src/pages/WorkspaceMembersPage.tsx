@@ -79,7 +79,7 @@ export default function WorkspaceMembersPage() {
       />
 
       {loading ? (
-        <LoadingState message={tr ? 'Üyeler yükleniyor...' : 'Loading members...'} />
+        <LoadingState variant="list" rows={5} message={tr ? 'Üyeler yükleniyor...' : 'Loading members...'} />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : members.length === 0 ? (
