@@ -2,9 +2,13 @@ import axios from 'axios'
 
 function apiBaseUrl() {
   const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-  const base = configured || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? ''
-    : 'https://daflow.onrender.com')
+  const isLocalApp = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const pointsToLocalApi = configured?.includes('localhost') || configured?.includes('127.0.0.1')
+  const base = configured && (isLocalApp || !pointsToLocalApi)
+    ? configured
+    : isLocalApp
+      ? ''
+      : 'https://daflow.onrender.com'
 
   if (!base) return '/api'
 
